@@ -63,7 +63,7 @@ def load_config() -> Config:
     geo_whitelist = _parse_geo_list(
         os.getenv(
             "BOT_GEO_WHITELIST",
-            "IN,BD,PK,ID,MY,TH,PH,EG,KZ,UZ,CI,AR",
+            "IN,PK,ID,MY,EG,CI,UZ,AZ,KZ,TH,AR,PH,BR,MX,CO",
         )
     )
 
