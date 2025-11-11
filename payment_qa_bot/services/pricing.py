@@ -3,31 +3,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 BASE_PRICE_PER_TEST = 85
-KYC_SURCHARGE = 45
 
 
 @dataclass(slots=True)
 class PriceBreakdown:
     tests_count: int
     base_total: int
-    kyc_required: bool
-    kyc_total: int
+    payout_surcharge: int
 
     @property
     def total(self) -> int:
-        return self.base_total + self.kyc_total
+        return self.base_total + self.payout_surcharge
 
 
-def calculate_price(tests_count: int, kyc_required: bool) -> PriceBreakdown:
+def calculate_price(tests_count: int, payout_surcharge: int) -> PriceBreakdown:
     if tests_count < 1:
         raise ValueError("tests_count must be >= 1")
+    if payout_surcharge < 0:
+        raise ValueError("payout_surcharge must be >= 0")
     base_total = tests_count * BASE_PRICE_PER_TEST
-    kyc_total = KYC_SURCHARGE if kyc_required else 0
     return PriceBreakdown(
         tests_count=tests_count,
         base_total=base_total,
-        kyc_required=kyc_required,
-        kyc_total=kyc_total,
+        payout_surcharge=payout_surcharge,
     )
 
 
