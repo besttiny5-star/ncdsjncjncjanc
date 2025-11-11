@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Payment QA — Live Testing</title>
+  <style>
+    :root {
+      --bg: #050b19;
+      --surface: #0b1328;
+      --surface-alt: #101b36;
+      --surface-soft: rgba(15, 27, 54, 0.65);
+      --border: rgba(148, 163, 184, 0.16);
+      --border-strong: rgba(124, 58, 237, 0.45);
+      --accent: #7c3aed;
+      --accent-soft: rgba(124, 58, 237, 0.16);
+      --accent-strong: #8b5cf6;
+      --text: #e6eef8;
+      --muted: #94a3b8;
+      --success: #22d3ee;
+      --shadow: 0 40px 120px rgba(4, 7, 18, 0.45);
+      font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(circle at 10% 20%, rgba(124, 58, 237, 0.2) 0%, rgba(5, 11, 25, 0) 55%),
+        radial-gradient(circle at 85% 10%, rgba(14, 165, 233, 0.18) 0%, rgba(5, 11, 25, 0) 40%),
+        linear-gradient(180deg, #040916 0%, #050b19 65%, #061021 100%);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(5, 11, 25, 0.8);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    }
+
+    .topbar .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 18px 24px;
+      font-size: 14px;
+    }
+
+    .logo {
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .logo span {
+      color: var(--accent-strong);
+    }
+
+    .nav {
+      display: flex;
+      gap: 18px;
+    }
+
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s ease;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+      padding-bottom: 120px;
+    }
+
+    section {
+      width: 100%;
+    }
+
+    .hero {
+      padding: 72px 0 0;
+      text-align: center;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(124, 58, 237, 0.14);
+      border: 1px solid rgba(124, 58, 237, 0.28);
+      color: var(--accent-strong);
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 20px;
+      font-size: clamp(40px, 5.2vw, 58px);
+      line-height: 1.05;
+      background: linear-gradient(120deg, #f8fafc 0%, #d8c7ff 45%, #9d7bff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .hero p + p {
+      margin-top: 12px;
+      font-size: 16px;
+    }
+
+    .pricing-card {
+      margin-top: 56px;
+      padding: 40px clamp(24px, 4vw, 52px);
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.82) 0%, rgba(20, 21, 37, 0.66) 100%);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .pricing-card h2 {
+      margin-top: 0;
+      text-align: center;
+      font-size: clamp(28px, 4vw, 36px);
+      margin-bottom: 32px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 24px;
+    }
+
+    .plan {
+      position: relative;
+      padding: 28px 24px;
+      background: rgba(10, 16, 31, 0.84);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 20px;
+      text-align: left;
+      transition: border 0.25s ease, transform 0.25s ease;
+    }
+
+    .plan:hover {
+      border-color: rgba(124, 58, 237, 0.5);
+      transform: translateY(-4px);
+    }
+
+    .plan.featured {
+      border: 1px solid rgba(124, 58, 237, 0.6);
+      background: linear-gradient(180deg, rgba(124, 58, 237, 0.18) 0%, rgba(10, 16, 31, 0.9) 45%);
+    }
+
+    .plan-title {
+      font-size: 15px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: rgba(230, 238, 248, 0.8);
+      margin-bottom: 10px;
+    }
+
+    .plan-amount {
+      font-size: clamp(30px, 4vw, 38px);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .plan-note {
+      color: var(--muted);
+      margin-bottom: 20px;
+      min-height: 44px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 22px;
+      border-radius: 14px;
+      border: none;
+      font-weight: 600;
+      text-decoration: none;
+      color: #fff;
+      cursor: pointer;
+      background: var(--accent);
+      box-shadow: 0 18px 45px rgba(124, 58, 237, 0.35);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      background: var(--accent-strong);
+      box-shadow: 0 20px 55px rgba(124, 58, 237, 0.45);
+    }
+
+    .btn.secondary {
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      color: var(--muted);
+      box-shadow: none;
+    }
+
+    .btn.secondary:hover {
+      color: var(--text);
+      border-color: rgba(124, 58, 237, 0.45);
+      background: rgba(124, 58, 237, 0.12);
+    }
+
+    .enterprise {
+      margin-top: 40px;
+      padding: 20px;
+      border-radius: 18px;
+      background: rgba(124, 58, 237, 0.12);
+      border: 1px solid rgba(124, 58, 237, 0.28);
+      text-align: center;
+    }
+
+    .enterprise h3 {
+      margin: 0 0 6px;
+    }
+
+    .enterprise p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .calculator {
+      background: linear-gradient(150deg, rgba(124, 58, 237, 0.18) 0%, rgba(15, 23, 42, 0.78) 55%, rgba(12, 20, 38, 0.95) 100%);
+      border: 1px solid rgba(124, 58, 237, 0.28);
+      border-radius: 28px;
+      padding: clamp(28px, 4vw, 48px);
+      box-shadow: var(--shadow);
+    }
+
+    .calculator h2 {
+      margin: 0 0 24px;
+      font-size: clamp(26px, 3.6vw, 34px);
+      text-align: left;
+    }
+
+    .calc-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: clamp(24px, 4vw, 48px);
+      align-items: start;
+    }
+
+    .calc-fields {
+      display: grid;
+      gap: 20px;
+    }
+
+    .calc-field label {
+      display: block;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: rgba(230, 238, 248, 0.7);
+      margin-bottom: 6px;
+    }
+
+    select,
+    input[type="number"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(9, 15, 29, 0.8);
+      color: var(--text);
+      font: inherit;
+    }
+
+    select:focus,
+    input[type="number"]:focus {
+      outline: 2px solid rgba(124, 58, 237, 0.4);
+      border-color: rgba(124, 58, 237, 0.45);
+    }
+
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    .addons {
+      display: grid;
+      gap: 12px;
+    }
+
+    .addon-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(124, 58, 237, 0.26);
+      background: rgba(124, 58, 237, 0.12);
+      font-size: 14px;
+    }
+
+    .addon-row input {
+      width: auto;
+      accent-color: var(--accent-strong);
+    }
+
+    .calc-summary {
+      padding: 24px 26px;
+      border-radius: 20px;
+      background: rgba(8, 12, 24, 0.92);
+      border: 1px solid rgba(124, 58, 237, 0.26);
+      display: grid;
+      gap: 14px;
+    }
+
+    .calc-total {
+      font-size: clamp(34px, 5vw, 46px);
+      font-weight: 700;
+    }
+
+    .calc-note {
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    .calculator-extra {
+      margin-top: 32px;
+      padding: 20px;
+      border-radius: 18px;
+      background: rgba(8, 13, 28, 0.85);
+      border: 1px solid rgba(124, 58, 237, 0.22);
+      text-align: center;
+      display: grid;
+      gap: 16px;
+    }
+
+    .calculator-extra p {
+      margin: 0;
+      font-size: 16px;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    .calculator-contacts {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .calculator-contacts a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: rgba(124, 58, 237, 0.16);
+      border: 1px solid rgba(124, 58, 237, 0.32);
+      color: var(--accent-strong);
+      text-decoration: none;
+      font-weight: 600;
+      transition: background 0.2s ease, border 0.2s ease, transform 0.2s ease;
+    }
+
+    .calculator-contacts a:hover {
+      background: rgba(124, 58, 237, 0.28);
+      border-color: rgba(124, 58, 237, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .steps {
+      display: grid;
+      gap: 24px;
+    }
+
+    .steps header {
+      text-align: center;
+    }
+
+    .steps header h2 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 4vw, 36px);
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+    }
+
+    .step {
+      padding: 24px;
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(8, 13, 28, 0.92);
+      box-shadow: 0 24px 60px rgba(4, 7, 18, 0.25);
+    }
+
+    .step h3 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 20px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .cta-card {
+      padding: clamp(28px, 4vw, 44px);
+      border-radius: 26px;
+      background: linear-gradient(135deg, rgba(10, 17, 33, 0.92) 0%, rgba(11, 19, 40, 0.88) 100%);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      display: grid;
+      gap: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      box-shadow: var(--shadow);
+    }
+
+    .cta-card h2 {
+      margin: 0 0 12px;
+      font-size: clamp(26px, 4vw, 34px);
+    }
+
+    .cta-steps {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+    }
+
+    .cta-steps li::before {
+      content: attr(data-step);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      margin-right: 12px;
+      border-radius: 999px;
+      background: rgba(124, 58, 237, 0.2);
+      color: var(--accent-strong);
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .cta-steps li {
+      display: flex;
+      align-items: flex-start;
+      font-size: 15px;
+    }
+
+    .cta-details {
+      display: grid;
+      gap: 12px;
+    }
+
+    .cta-details .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .modules header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .modules header h2 {
+      margin: 0 0 14px;
+      font-size: clamp(28px, 4vw, 36px);
+    }
+
+    .modules header p {
+      margin: 0 auto;
+      max-width: 680px;
+      color: var(--muted);
+    }
+
+    .module-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .module-switcher button {
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 999px;
+      padding: 10px 18px;
+      background: rgba(12, 19, 40, 0.8);
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .module-switcher button:hover {
+      color: var(--text);
+      border-color: rgba(124, 58, 237, 0.45);
+    }
+
+    .module-switcher button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 18px 40px rgba(124, 58, 237, 0.35);
+    }
+
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    .module-card {
+      padding: 22px;
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: rgba(9, 15, 29, 0.9);
+      display: grid;
+      gap: 12px;
+      text-align: left;
+    }
+
+    .module-card h3 {
+      margin: 0;
+      color: var(--accent-strong);
+      font-size: 18px;
+    }
+
+    .module-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .module-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.16);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .module-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .coverage {
+      text-align: center;
+      padding: 56px 0 0;
+    }
+
+    .coverage h3 {
+      margin: 0 0 16px;
+      font-size: clamp(24px, 3.5vw, 32px);
+    }
+
+    .coverage-badges {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .coverage-badge {
+      padding: 12px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(9, 15, 29, 0.8);
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .footer {
+      padding: 28px 24px 48px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(5, 11, 25, 0.82);
+    }
+
+    .footer span {
+      color: rgba(148, 163, 184, 0.6);
+    }
+
+    @media (max-width: 960px) {
+      main {
+        gap: 64px;
+      }
+
+      .calc-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .calc-summary {
+        padding: 20px;
+      }
+
+      .cta-card {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar .wrap {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .nav {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+
+      .hero {
+        padding-top: 60px;
+      }
+
+      .pricing-card {
+        padding: 32px 20px;
+      }
+
+      .module-card {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <div class="logo">Payment <span>QA</span> — Live Testing</div>
+      <nav class="nav">
+        <a href="#pricing">Пакеты</a>
+        <a href="#calculator">Калькулятор</a>
+        <a href="#modules">Модули</a>
+        <a href="#contact">Контакты</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-tag">Realtime QA · 15+ GEO</div>
+        <h1>Проверяем реальные платежи в сложных GEO</h1>
+        <p>Готовим чек-листы, делаем живые транзакции и фиксируем результат на видео. Проверяем карты, локальные кошельки, ваучеры и мобильные методы.</p>
+        <p>Работаем с iGaming, подписками, сервисами и финтехом. Все кейсы выполняют локальные операторы на реальных устройствах.</p>
+      </div>
+    </section>
+
+    <section id="pricing">
+      <div class="container">
+        <div class="pricing-card">
+          <h2>Выберите пакет тестирования</h2>
+          <div class="pricing-grid">
+            <article class="plan">
+              <div class="plan-title">1 Credit</div>
+              <div class="plan-amount">€85</div>
+              <div class="plan-note">1 платёж · видео · чек-лист</div>
+              <a href="#" class="btn order-btn" data-package="single">Заказать тест</a>
+            </article>
+            <article class="plan">
+              <div class="plan-title">5 Credits</div>
+              <div class="plan-amount">€420</div>
+              <div class="plan-note">Экономия €5 на пакете</div>
+              <a href="#" class="btn order-btn" data-package="mini">Заказать аудит</a>
+            </article>
+            <article class="plan featured">
+              <div class="plan-title">10 Credits · Best Value</div>
+              <div class="plan-amount">€723</div>
+              <div class="plan-note">15% скидка от полной стоимости</div>
+              <a href="#" class="btn order-btn" data-package="retainer">Запросить retainer</a>
+            </article>
+          </div>
+          <div class="enterprise">
+            <h3>Нужны кастомные сценарии или SLA?</h3>
+            <p>Подготовим план тестирования под ваш продукт, соберём выделенную команду и договоримся о таймлайне.</p>
+            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Связаться с командой</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="calculator">
+      <div class="container">
+        <div class="calculator">
+          <h2>Рассчитать заказ</h2>
+          <div class="calc-grid">
+            <div class="calc-fields">
+              <div class="calc-field">
+                <label for="calcCountry">Страна (GEO)</label>
+                <select id="calcCountry">
+                  <option value="IN">🇮🇳 Индия</option>
+                  <option value="PK">🇵🇰 Пакистан</option>
+                  <option value="ID">🇮🇩 Индонезия</option>
+                  <option value="MY">🇲🇾 Малайзия</option>
+                  <option value="EG">🇪🇬 Египет</option>
+                  <option value="CI">🇨🇮 Кот-д'Ивуар</option>
+                  <option value="UZ">🇺🇿 Узбекистан</option>
+                  <option value="AZ">🇦🇿 Азербайджан</option>
+                  <option value="KZ">🇰🇿 Казахстан</option>
+                  <option value="TH">🇹🇭 Таиланд</option>
+                  <option value="AR">🇦🇷 Аргентина</option>
+                </select>
+              </div>
+              <div class="calc-field">
+                <label for="testsCount">Количество тестов</label>
+                <input id="testsCount" type="number" min="1" value="1" step="1" />
+              </div>
+              <div class="calc-field">
+                <label>Дополнительные опции</label>
+                <div class="addons">
+                  <label class="addon-row"><input type="checkbox" class="addon" data-price="20" data-label="Детальный UX-отчёт"> Детальный UX-отчёт (+€20)</label>
+                  <label class="addon-row"><input type="checkbox" class="addon" data-price="15" data-label="Срочный SLA 24ч"> Срочный SLA 24ч (+€15)</label>
+                  <label class="addon-row"><input type="checkbox" class="addon" data-price="85" data-label="Ещё один метод/валюта"> Ещё один метод/валюта (+€85)</label>
+                  <label class="addon-row"><input type="checkbox" class="addon" data-price="45" data-label="KYC на платформе теста"> KYC на платформе теста (+€45)</label>
+                </div>
+              </div>
+            </div>
+            <aside class="calc-summary">
+              <div>Итог</div>
+              <div id="calcTotal" class="calc-total">€85</div>
+              <div id="calcNote" class="calc-note"></div>
+              <a id="calcCta" class="btn" href="#">Начать тест за €85</a>
+              <a class="btn secondary" href="report_sample.pdf" target="_blank" rel="noopener">Скачать пример отчёта (PDF)</a>
+            </aside>
+          </div>
+          <div class="calculator-extra">
+            <p>Нету нужного гео? Напишите нам, скорее всего мы его покроем!</p>
+            <div class="calculator-contacts">
+              <a data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Telegram</a>
+              <a href="mailto:hello@example.com">hello@example.com</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="container">
+        <div class="steps">
+          <header>
+            <h2>Как это работает</h2>
+            <p>Собираем данные о продукте, повторяем живой флоу, фиксируем все шаги и возвращаем внятный отчёт.</p>
+          </header>
+          <div class="steps-grid">
+            <article class="step">
+              <h3>1️⃣ Создаёте заказ</h3>
+              <p>Опишите GEO, сценарии и методы. Выбирайте готовые пакеты или кастомные опции.</p>
+            </article>
+            <article class="step">
+              <h3>2️⃣ Тестируем на месте</h3>
+              <p>Локальный оператор выполняет реальную оплату, снимает видео и фиксирует статусы.</p>
+            </article>
+            <article class="step">
+              <h3>3️⃣ Получаете отчёт</h3>
+              <p>Видео, чек-лист, статусы (Success/Fail) и рекомендации по оптимизации.</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="container">
+        <div class="cta-card">
+          <div>
+            <h2>Готовы запустить тест?</h2>
+            <ul class="cta-steps">
+              <li data-step="1">Оставляете заявку или пишете в Telegram.</li>
+              <li data-step="2">Подтверждаем сценарии и смету.</li>
+              <li data-step="3">Делаем тесты и присылаем отчёт в срок.</li>
+            </ul>
+          </div>
+          <div class="cta-details">
+            <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
+            <div class="pill">Email: <strong>hello@example.com</strong></div>
+            <div class="pill">SLA ответа · 4 часа</div>
+            <a class="btn" href="mailto:hello@example.com?subject=Start%20Payment%20QA">Запросить предложение</a>
+            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Написать в Telegram</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="modules" class="modules">
+      <div class="container">
+        <header>
+          <h2>Модули тестирования</h2>
+          <p>Переключайтесь между регионами и смотрите, какие методы мы покрываем. Проверяем успешные и негативные сценарии, подключаем повторные прогоны и A/B.</p>
+        </header>
+        <div class="module-switcher" id="moduleSwitcher"></div>
+        <div class="modules-grid" id="modulesGrid"></div>
+        <div class="coverage">
+          <h3>Мы покрываем весь цикл тестирования</h3>
+          <div class="coverage-badges">
+            <span class="coverage-badge">Live Ops</span>
+            <span class="coverage-badge">Видео-отчёты</span>
+            <span class="coverage-badge">Analytics Dashboard</span>
+            <span class="coverage-badge">Retest &amp; Regression</span>
+          </div>
+          <a class="btn" href="#calculator">Рассчитать заказ</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div>© 2024 Payment QA. <span>Live Testing.</span></div>
+  </footer>
+
+  <script>
+    const basePrice = 85;
+    const discountPerBundle = 10;
+    const bundleSize = 5;
+    const currencyFormat = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+
+    const countrySelect = document.getElementById('calcCountry');
+    const testsInput = document.getElementById('testsCount');
+    const addons = Array.from(document.querySelectorAll('.addon'));
+    const totalEl = document.getElementById('calcTotal');
+    const noteEl = document.getElementById('calcNote');
+    const ctaEl = document.getElementById('calcCta');
+
+    function calculateTotal() {
+      const rawValue = testsInput.value.trim();
+      const parsedValue = parseInt(rawValue, 10);
+      const count = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
+
+      if (rawValue === '') {
+        // Allow пользователю временно очистить поле ввода, не подставляя значение обратно
+      } else if (String(count) !== rawValue) {
+        testsInput.value = String(count);
+      }
+
+      const baseTotal = basePrice * count;
+      const discount = Math.floor(count / bundleSize) * discountPerBundle;
+      const addonsTotal = addons.filter(a => a.checked).reduce((sum, addon) => sum + Number(addon.dataset.price), 0);
+      const total = baseTotal - discount + addonsTotal;
+
+      const formatted = currencyFormat.format(total);
+      totalEl.textContent = formatted;
+
+      if (discount > 0 || addonsTotal > 0) {
+        const discountText = discount > 0 ? `Скидка: −${currencyFormat.format(discount)}` : null;
+        const addonsText = addonsTotal > 0 ? `Опции: +${currencyFormat.format(addonsTotal)}` : null;
+        noteEl.textContent = [discountText, addonsText].filter(Boolean).join(' · ');
+      } else {
+        noteEl.textContent = '';
+      }
+
+      const selectedAddons = addons.filter(a => a.checked);
+      const addonCount = selectedAddons.length;
+      const geoValue = countrySelect ? countrySelect.value : 'IN';
+
+      if (ctaEl) {
+        const payloadParts = [
+          'calc',
+          `geo${geoValue}`,
+          `tests${count}`,
+          addonCount ? `opt${addonCount}` : 'opt0',
+          `total${Math.round(total)}`
+        ];
+
+        ctaEl.textContent = `Начать тест за ${formatted}`;
+        ctaEl.dataset.startPayload = payloadParts.join('_');
+        ctaEl.dataset.geo = geoValue;
+        ctaEl.dataset.tests = String(count);
+        ctaEl.dataset.total = String(Math.round(total));
+        ctaEl.dataset.addons = String(addonCount);
+      }
+    }
+
+    countrySelect.addEventListener('change', calculateTotal);
+    testsInput.addEventListener('input', calculateTotal);
+    addons.forEach(addon => addon.addEventListener('change', calculateTotal));
+
+    calculateTotal();
+
+    const modules = {
+      asia: {
+        title: 'Азия',
+        methods: [
+          { name: 'UPI / PhonePe', country: 'Индия', type: 'Wallet / Bank' },
+          { name: 'JazzCash · Easypaisa', country: 'Пакистан', type: 'Wallet' },
+          { name: 'PromptPay', country: 'Таиланд', type: 'QR-pay' },
+          { name: "Touch 'n Go", country: 'Малайзия', type: 'Wallet' },
+          { name: 'DANA / OVO', country: 'Индонезия', type: 'Wallet' }
+        ]
+      },
+      africa: {
+        title: 'Африка & MENA',
+        methods: [
+          { name: 'M‑Pesa', country: 'Кения', type: 'Mobile Money' },
+          { name: 'Fawry', country: 'Египет', type: 'Cash Network' },
+          { name: 'MTN Mobile Money', country: 'Гана / Уганда', type: 'Mobile Money' },
+          { name: 'Orange Money', country: "Кот-д'Ивуар", type: 'Mobile Money' },
+          { name: 'Paymob', country: 'MENA', type: 'Card acquiring' }
+        ]
+      },
+      latam: {
+        title: 'LatAm',
+        methods: [
+          { name: 'PIX', country: 'Бразилия', type: 'Instant Pay' },
+          { name: 'SPEI', country: 'Мексика', type: 'Bank transfer' },
+          { name: 'PSE', country: 'Колумбия', type: 'Bank transfer' },
+          { name: 'Pago Fácil', country: 'Аргентина', type: 'Cash Network' },
+          { name: 'Boleto Bancário', country: 'Бразилия', type: 'Voucher' }
+        ]
+      },
+      cis: {
+        title: 'CIS & Восточная Европа',
+        methods: [
+          { name: 'Kaspi / Halyk', country: 'Казахстан', type: 'Bank transfer' },
+          { name: 'Payme / Apelsin', country: 'Узбекистан', type: 'Wallet' },
+          { name: 'Idram', country: 'Армения', type: 'Wallet' },
+          { name: 'ePay', country: 'Казахстан', type: 'Card acquiring' }
+        ]
+      }
+    };
+
+    const moduleSwitcher = document.getElementById('moduleSwitcher');
+    const modulesGrid = document.getElementById('modulesGrid');
+
+    function renderModules(activeKey) {
+      const config = modules[activeKey];
+      modulesGrid.innerHTML = '';
+
+      config.methods.forEach(method => {
+        const card = document.createElement('article');
+        card.className = 'module-card';
+        card.innerHTML = `
+          <h3>${method.name}</h3>
+          <div class="module-tags">
+            <span class="module-tag">${method.country}</span>
+            <span class="module-tag">${method.type}</span>
+          </div>
+          <p>Тестируем успешные и негативные сценарии, снимаем видео, готовим чек-листы и фиксацию статусов.</p>
+        `;
+        modulesGrid.appendChild(card);
+      });
+
+      Array.from(moduleSwitcher.children).forEach(button => {
+        button.classList.toggle('active', button.dataset.key === activeKey);
+      });
+    }
+
+    Object.entries(modules).forEach(([key, value], index) => {
+      const button = document.createElement('button');
+      button.dataset.key = key;
+      button.type = 'button';
+      button.textContent = value.title;
+      button.addEventListener('click', () => renderModules(key));
+      moduleSwitcher.appendChild(button);
+
+      if (index === 0) {
+        button.classList.add('active');
+      }
+    });
+
+    renderModules(Object.keys(modules)[0]);
+  </script>
+
+  <script>
+    // Telegram Bot integration
+    const BOT_USERNAME = 'your_bot_here'; // Замените на реальное имя бота
+    const geoSelect = document.getElementById('calcCountry');
+
+    const updateTelegramLinks = () => {
+      document.querySelectorAll('[data-telegram-link]').forEach(link => {
+        link.href = `https://t.me/${BOT_USERNAME}`;
+      });
+
+      document.querySelectorAll('.telegram-handle').forEach(el => {
+        el.textContent = `@${BOT_USERNAME}`;
+      });
+    };
+
+    const openTelegram = (payload) => {
+      const deeplink = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
+      window.open(deeplink, '_blank');
+    };
+
+    updateTelegramLinks();
+
+    document.querySelectorAll('.order-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        const packageType = btn.dataset.package;
+        const geo = geoSelect ? geoSelect.value : 'IN';
+
+        openTelegram(`pkg_${packageType}_geo_${geo}`);
+      });
+    });
+
+    const calculatorBtn = document.getElementById('calcCta');
+    if (calculatorBtn) {
+      calculatorBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        const defaultGeo = geoSelect ? geoSelect.value : 'IN';
+        const payload = calculatorBtn.dataset.startPayload || `calc_geo${defaultGeo}_tests1`;
+
+        openTelegram(payload);
+      });
+    }
+  </script>
+</body>
+</html>

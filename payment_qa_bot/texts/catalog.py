@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict
+
+
+@dataclass(slots=True)
+class TextCatalog:
+    messages: Dict[str, Dict[str, str]]
+
+    def get(self, key: str, language: str = "en", **kwargs: object) -> str:
+        lang = language if language in self.messages else "en"
+        template = self.messages.get(lang, {}).get(key)
+        if template is None:
+            template = self.messages.get("en", {}).get(key, key)
+        return template.format(**kwargs)
+
+    def button(self, key: str, language: str = "en") -> str:
+        return self.get(key, language)
+
+
+TEXTS = TextCatalog(
+    messages={
+        "en": {
+            "start.site.invalid": "We could not read the order payload. Please open the link from the website again or start without parameters.",
+            "start.tg": "Welcome! Let's create a new payment QA order. We'll guide you through the steps.",
+            "wizard.geo": "🌍 Step 1/9 — Select GEO\n\nChoose the country for testing:",
+            "wizard.method": "💳 Step 2/9 — Payment method\n\nType the payment method or provider that should be tested.",
+            "wizard.tests": "🧪 Step 3/9 — Number of tests\n\nSend an integer from 1 to 100.",
+            "wizard.withdraw": "4️⃣ Step 4/9 — Withdraw funds?\n\nShould testers withdraw funds from the account?",
+            "wizard.custom": "5️⃣ Step 5/9 — Custom interactions?\n\nDo you need any extra actions on the website?",
+            "wizard.custom.text": "Please describe the custom test scenario.",
+            "wizard.kyc": "6️⃣ Step 6/9 — KYC required?\n\nIf KYC is needed we will add €45 to the total.",
+            "wizard.comments": "7️⃣ Step 7/9 — Extra comments\n\nShare any context, links or attachments. Send text or choose Skip.",
+            "wizard.site": "8️⃣ Step 8/9 — Website URL\n\nSend the checkout page URL starting with http:// or https://.",
+            "wizard.login": "9️⃣ Step 9/9 — Login for testers\n\nSend the login if required or choose Skip.",
+            "wizard.password": "Password for testers\n\nSend the password or Skip.",
+            "wizard.skip": "Skip",
+            "wizard.back": "◀️ Back",
+            "wizard.cancel": "❌ Cancel",
+            "wizard.yes": "Yes",
+            "wizard.no": "No",
+            "wizard.missing.custom_text": "Please describe the custom test scenario to continue.",
+            "wizard.invalid.geo": "Please choose one of the suggested GEO buttons.",
+            "wizard.invalid.method": "The payment method should be 2-100 characters long.",
+            "wizard.invalid.tests": "The number of tests must be an integer from 1 to 100.",
+            "wizard.invalid.url": "The URL must start with http:// or https://.",
+            "wizard.invalid.comment": "Comments should not exceed 1000 characters.",
+            "wizard.invalid.login": "Login must be between 2 and 120 characters.",
+            "wizard.invalid.password": "Password must be between 2 and 120 characters.",
+            "confirmation.title": "Please confirm the order",
+            "confirmation.body": (
+                "<b>Summary</b>\n"
+                "GEO: {geo}\n"
+                "Tests: {tests}\n"
+                "Withdraw funds: {withdraw}\n"
+                "Custom test: {custom}\n"
+                "KYC: {kyc}\n"
+                "Website: {site}\n"
+                "Login: {login}\n"
+                "Payment method: {method}\n"
+                "Comments: {comments}\n"
+                "Total: €{total}\n\n"
+                "Ready to continue?"
+            ),
+            "confirmation.confirm": "✅ Confirm and pay",
+            "confirmation.edit": "✏️ Edit data",
+            "confirmation.cancel": "❌ Cancel",
+            "confirmation.cancelled": "Order cancelled. If you change your mind, start again with /start.",
+            "confirmation.ready": "Great! Here are the payment details.",
+            "payment.instructions": (
+                "Send strictly via TRC-20 (Tron) network to: <code>{wallet}</code>.\n"
+                "After sending, press ‘I've paid’ and attach your proof (screenshot or TXID)."
+            ),
+            "payment.button.paid": "✅ I've paid — send receipt",
+            "payment.button.help": "❓ Payment help",
+            "payment.button.support": "📞 Support",
+            "payment.request.proof": "Please attach a screenshot, document or TXID to confirm the payment.",
+            "payment.help": "If you need help with the payment, contact {contact}.",
+            "payment.support": "Support: {contact}",
+            "payment.thanks": "✅ Payment proof received! We will verify it shortly.",
+            "payment.txid.saved": "Payment details received. We'll notify admins for review.",
+            "status.none": "You don't have any orders yet.",
+            "status.last": "Last order #{order_id}: status — {status}, total — €{total}.",
+            "help.text": "Commands:\n/start — restart the wizard\n/status — last order status\n/cancel — cancel current flow\n/lang — switch language",
+            "lang.updated": "Language switched to English.",
+            "lang.prompt": "Send /lang to switch language anytime.",
+            "admin.notify.new": "New order #{order_id} from @{username} ({geo}) — €{total}.",
+            "admin.notify.payment": "Payment proof for order #{order_id} received.",
+            "admin.stats.header": "Admin dashboard",
+            "admin.stats.line": "{status}: {count}",
+            "admin.no.orders": "No orders found.",
+        },
+        "ru": {
+            "start.site.invalid": "Не удалось распознать параметры заявки. Откройте ссылку с сайта ещё раз или используйте /start без параметров.",
+            "start.tg": "Привет! Давайте оформим заявку на QA платежей. Я помогу пройти все шаги.",
+            "wizard.geo": "🌍 Шаг 1/9 — Выбор GEO\n\nВыберите страну для тестирования:",
+            "wizard.method": "💳 Шаг 2/9 — Метод оплаты\n\nНапишите способ или сервис, который нужно протестировать.",
+            "wizard.tests": "🧪 Шаг 3/9 — Количество тестов\n\nОтправьте целое число от 1 до 100.",
+            "wizard.withdraw": "4️⃣ Шаг 4/9 — Выводить средства?\n\nНужно ли выводить деньги с аккаунта?",
+            "wizard.custom": "5️⃣ Шаг 5/9 — Дополнительный сценарий?\n\nНужны ли на сайте особые действия?",
+            "wizard.custom.text": "Опишите, пожалуйста, кастомный сценарий.",
+            "wizard.kyc": "6️⃣ Шаг 6/9 — Требуется KYC?\n\nПри включении добавим €45 к стоимости.",
+            "wizard.comments": "7️⃣ Шаг 7/9 — Комментарии\n\nОтправьте детали, ссылки или вложения. Можно пропустить.",
+            "wizard.site": "8️⃣ Шаг 8/9 — Сайт для теста\n\nОтправьте ссылку, начинающуюся с http:// или https://.",
+            "wizard.login": "9️⃣ Шаг 9/9 — Логин для тестеров\n\nПришлите логин или пропустите.",
+            "wizard.password": "Пароль для тестеров\n\nПришлите пароль или пропустите.",
+            "wizard.skip": "Пропустить",
+            "wizard.back": "◀️ Назад",
+            "wizard.cancel": "❌ Отмена",
+            "wizard.yes": "Да",
+            "wizard.no": "Нет",
+            "wizard.missing.custom_text": "Нужно описать сценарий, чтобы продолжить.",
+            "wizard.invalid.geo": "Пожалуйста, выберите одну из предложенных стран.",
+            "wizard.invalid.method": "Метод оплаты должен содержать от 2 до 100 символов.",
+            "wizard.invalid.tests": "Количество тестов должно быть целым числом от 1 до 100.",
+            "wizard.invalid.url": "Ссылка должна начинаться с http:// или https://.",
+            "wizard.invalid.comment": "Комментарий не должен превышать 1000 символов.",
+            "wizard.invalid.login": "Логин должен содержать от 2 до 120 символов.",
+            "wizard.invalid.password": "Пароль должен содержать от 2 до 120 символов.",
+            "confirmation.title": "Подтвердите заявку",
+            "confirmation.body": (
+                "<b>Проверьте детали</b>\n"
+                "GEO: {geo}\n"
+                "Тесты: {tests}\n"
+                "Вывод средств: {withdraw}\n"
+                "Кастомный тест: {custom}\n"
+                "KYC: {kyc}\n"
+                "Сайт: {site}\n"
+                "Логин: {login}\n"
+                "Метод оплаты: {method}\n"
+                "Комментарий: {comments}\n"
+                "Итого: €{total}\n\n"
+                "Всё верно?"
+            ),
+            "confirmation.confirm": "✅ Подтвердить и оплатить",
+            "confirmation.edit": "✏️ Изменить данные",
+            "confirmation.cancel": "❌ Отмена",
+            "confirmation.cancelled": "Заявка отменена. Если передумаете — начните заново через /start.",
+            "confirmation.ready": "Отлично! Вот реквизиты для оплаты.",
+            "payment.instructions": (
+                "Отправьте строго по сети TRC-20 (Tron) на кошелёк: <code>{wallet}</code>.\n"
+                "После отправки нажмите «Я оплатил» и прикрепите чек или TXID."
+            ),
+            "payment.button.paid": "✅ Я оплатил — отправить чек",
+            "payment.button.help": "❓ Помощь с оплатой",
+            "payment.button.support": "📞 Поддержка",
+            "payment.request.proof": "Пожалуйста, прикрепите скриншот, документ или укажите TXID платежа.",
+            "payment.help": "Если нужна помощь с оплатой, напишите {contact}.",
+            "payment.support": "Контакт поддержки: {contact}",
+            "payment.thanks": "✅ Чек получен! Мы проверим оплату в ближайшее время.",
+            "payment.txid.saved": "Детали оплаты получены. Сообщим администраторам.",
+            "status.none": "У вас ещё нет заказов.",
+            "status.last": "Последний заказ #{order_id}: статус — {status}, сумма — €{total}.",
+            "help.text": "Команды:\n/start — начать заново\n/status — статус последнего заказа\n/cancel — отменить текущий шаг\n/lang — сменить язык",
+            "lang.updated": "Язык переключен на русский.",
+            "lang.prompt": "Отправьте /lang, чтобы сменить язык в любой момент.",
+            "admin.notify.new": "Новый заказ #{order_id} от @{username} ({geo}) — €{total}.",
+            "admin.notify.payment": "Получен платёжный чек по заказу #{order_id}.",
+            "admin.stats.header": "Админ-панель",
+            "admin.stats.line": "{status}: {count}",
+            "admin.no.orders": "Заказов нет.",
+        },
+    }
+)

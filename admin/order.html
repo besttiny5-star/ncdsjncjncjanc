@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Детали заказа • Payment QA Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="data.js" defer></script>
+    <script src="order.js" defer></script>
+  </head>
+  <body class="order-page">
+    <header class="topbar order-topbar">
+      <div class="topbar__left">
+        <a class="btn btn--ghost" id="back-link">← Назад к списку</a>
+        <h1 id="order-title">Заказ</h1>
+        <p id="order-subtitle"></p>
+      </div>
+      <div class="topbar__right">
+        <div class="order-nav">
+          <button class="btn btn--ghost" id="prev-order">← Предыдущий заказ</button>
+          <button class="btn btn--ghost" id="next-order">Следующий заказ →</button>
+        </div>
+        <button class="btn btn--primary" id="change-status">Изменить статус</button>
+      </div>
+    </header>
+
+    <main class="main order-main">
+      <section class="order-section" id="client-section"></section>
+      <section class="order-section" id="status-section"></section>
+      <section class="order-section" id="details-section"></section>
+      <section class="order-section" id="files-section"></section>
+      <section class="order-section" id="payment-section"></section>
+      <section class="order-section" id="tester-section"></section>
+      <section class="order-section" id="activity-section"></section>
+    </main>
+
+    <dialog class="modal" id="status-dialog">
+      <article class="modal__body">
+        <button class="modal__close" data-close>✕</button>
+        <h3>Изменить статус заказа</h3>
+        <label class="input">
+          <span>Статус</span>
+          <select id="status-select">
+            <option value="awaiting_payment">Ожидает оплаты</option>
+            <option value="paid">Оплачено</option>
+            <option value="in_progress">В процессе</option>
+            <option value="completed">Завершено</option>
+            <option value="cancelled">Отменено</option>
+          </select>
+        </label>
+        <label class="input">
+          <span>Комментарий</span>
+          <textarea id="status-note" rows="4"></textarea>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="status-notify-detail" checked />
+          <span>Отправить уведомление клиенту</span>
+        </label>
+        <div class="modal__footer">
+          <button class="btn btn--ghost" data-close>Отмена</button>
+          <button class="btn btn--primary" id="status-save">Сохранить</button>
+        </div>
+      </article>
+    </dialog>
+
+    <div class="toast-container" id="toast"></div>
+  </body>
+</html>

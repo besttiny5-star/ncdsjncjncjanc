@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Payment QA Bot — Admin Dashboard</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://unpkg.com/modern-css-reset/dist/reset.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js" defer></script>
+    <script src="data.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="page">
+      <aside class="sidebar">
+        <div class="sidebar__logo">Payment <span>QA</span></div>
+        <nav class="sidebar__nav">
+          <a href="#overview" class="is-active">
+            <span class="icon">📊</span>
+            Дашборд
+          </a>
+          <a href="#orders">
+            <span class="icon">🧾</span>
+            Заказы
+          </a>
+          <a href="#activity">
+            <span class="icon">⚡️</span>
+            Активность
+          </a>
+          <a href="#testers">
+            <span class="icon">👩‍💻</span>
+            Тестеры
+          </a>
+          <a href="#reports">
+            <span class="icon">📈</span>
+            Отчёты
+          </a>
+        </nav>
+        <div class="sidebar__footer">
+          <button class="btn btn--ghost" id="export-dashboard">⬇️ Экспорт дашборда</button>
+          <div class="sidebar__status">
+            <span class="dot dot--green"></span>
+            Данные обновлены <span id="last-sync">только что</span>
+          </div>
+        </div>
+      </aside>
+      <div class="content">
+        <header class="topbar">
+          <div class="topbar__left">
+            <h1>Админ-панель Payment QA</h1>
+            <p>Мониторинг и управление качеством платежей в реальном времени.</p>
+          </div>
+          <div class="topbar__right">
+            <button class="btn btn--soft" id="refresh-data">🔄 Обновить</button>
+            <div class="profile">
+              <div class="profile__info">
+                <span class="profile__name">Алексей П.</span>
+                <span class="profile__role">Старший администратор</span>
+              </div>
+              <img src="https://i.pravatar.cc/48?img=68" alt="avatar" class="profile__avatar" />
+            </div>
+          </div>
+        </header>
+
+        <main class="main">
+          <section class="cards" id="overview">
+            <header class="section-header">
+              <div>
+                <h2>Ключевые метрики</h2>
+                <p>Важные показатели бизнеса в четырёх блоках: финансы, заказы, клиенты, операции.</p>
+              </div>
+              <div class="period-switcher">
+                <button data-range="7">7 дней</button>
+                <button data-range="30" class="is-active">30 дней</button>
+                <button data-range="90">90 дней</button>
+                <button data-range="365">Год</button>
+                <button data-range="custom" id="custom-range-button">Произвольно</button>
+              </div>
+            </header>
+            <div class="cards__grid" id="metrics-grid"></div>
+          </section>
+
+          <section class="charts" id="reports">
+            <header class="section-header">
+              <div>
+                <h2>Аналитика</h2>
+                <p>Интерактивные графики с возможностью экспорта.</p>
+              </div>
+              <div class="charts__controls">
+                <label class="input input--inline">
+                  <span>Период</span>
+                  <select id="chart-period">
+                    <option value="7">7 дней</option>
+                    <option value="30" selected>30 дней</option>
+                    <option value="90">90 дней</option>
+                    <option value="365">365 дней</option>
+                  </select>
+                </label>
+                <label class="input input--inline">
+                  <span>С</span>
+                  <input type="date" id="chart-from" />
+                </label>
+                <label class="input input--inline">
+                  <span>По</span>
+                  <input type="date" id="chart-to" />
+                </label>
+                <button class="btn btn--ghost" id="apply-chart-range">Применить</button>
+              </div>
+            </header>
+
+            <div class="chart-cards">
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <div>
+                    <h3>Доход по дням</h3>
+                    <p>Сумма оплаченных заказов за период</p>
+                  </div>
+                  <div class="chart-card__actions">
+                    <button class="btn-icon" data-chart-download="revenue" title="Экспорт PNG">🖼️</button>
+                  </div>
+                </div>
+                <canvas id="revenue-chart" height="320"></canvas>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <div>
+                    <h3>Статусы заказов</h3>
+                    <p>Доли и количество заказов по статусам</p>
+                  </div>
+                  <div class="chart-card__actions">
+                    <button class="btn-icon" data-chart-download="status" title="Экспорт PNG">🖼️</button>
+                  </div>
+                </div>
+                <canvas id="status-chart" height="320"></canvas>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <div>
+                    <h3>Популярность GEO</h3>
+                    <p>Топ стран по количеству заказов и доходу</p>
+                  </div>
+                  <div class="chart-card__actions">
+                    <button class="btn-icon" data-chart-download="geo" title="Экспорт PNG">🖼️</button>
+                  </div>
+                </div>
+                <canvas id="geo-chart" height="320"></canvas>
+              </article>
+
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <div>
+                    <h3>Популярность пакетов</h3>
+                    <p>Распределение заказов и выручки по пакетам</p>
+                  </div>
+                  <div class="chart-card__actions">
+                    <button class="btn-icon" data-chart-download="package" title="Экспорт PNG">🖼️</button>
+                  </div>
+                </div>
+                <canvas id="package-chart" height="320"></canvas>
+              </article>
+            </div>
+          </section>
+
+          <section class="activity" id="activity">
+            <header class="section-header">
+              <div>
+                <h2>Лента активности</h2>
+                <p>Последние события. Автообновление каждые 30 секунд.</p>
+              </div>
+              <div class="activity__controls">
+                <label class="input input--inline">
+                  <span>Тип</span>
+                  <select id="activity-type">
+                    <option value="all">Все</option>
+                    <option value="order_created">Заказ создан</option>
+                    <option value="order_paid">Оплата подтверждена</option>
+                    <option value="payment_proof_received">Получен чек</option>
+                    <option value="status_changed">Изменён статус</option>
+                    <option value="tester_assigned">Назначен тестер</option>
+                    <option value="tester_unassigned">Снят тестер</option>
+                    <option value="report_uploaded">Отчёт загружен</option>
+                    <option value="order_completed">Заказ завершён</option>
+                    <option value="order_cancelled">Заказ отменён</option>
+                    <option value="note_added">Добавлена заметка</option>
+                    <option value="tester_created">Создан тестер</option>
+                    <option value="admin_action">Действие администратора</option>
+                  </select>
+                </label>
+                <label class="input input--inline input--search">
+                  <input type="search" id="activity-search" placeholder="Поиск по описанию" />
+                  <span class="icon">🔍</span>
+                </label>
+                <button class="btn btn--ghost" id="export-activity">Экспорт</button>
+              </div>
+            </header>
+            <ol class="activity__list" id="activity-feed"></ol>
+          </section>
+
+          <section class="orders" id="orders">
+            <header class="section-header">
+              <div>
+                <h2>Управление заказами</h2>
+                <p>Фильтрация, массовые действия, экспорт и подробности по каждому заказу.</p>
+              </div>
+              <div class="orders__actions">
+                <button class="btn btn--soft" id="save-filters">💾 Сохранить фильтры</button>
+                <button class="btn btn--ghost" id="reset-filters">Сбросить</button>
+                <button class="btn btn--primary" id="export-orders">⬇️ Экспорт CSV</button>
+              </div>
+            </header>
+
+            <form class="filters" id="orders-filters">
+              <div class="filters__group filters__group--wide">
+                <label class="input input--search">
+                  <input type="search" name="query" placeholder="Поиск: номер, username, Telegram ID, email" />
+                  <span class="icon">🔍</span>
+                </label>
+              </div>
+              <div class="filters__group">
+                <span class="filters__label">Статусы</span>
+                <div class="chips" id="status-chips"></div>
+              </div>
+              <div class="filters__group">
+                <label class="input">
+                  <span>Пакет</span>
+                  <select name="package">
+                    <option value="all">Все</option>
+                    <option value="single">Single Test</option>
+                    <option value="mini">Mini Audit</option>
+                    <option value="retainer">Retainer</option>
+                  </select>
+                </label>
+              </div>
+              <div class="filters__group">
+                <label class="input">
+                  <span>GEO</span>
+                  <select name="geo" multiple size="5" id="geo-select"></select>
+                </label>
+              </div>
+              <div class="filters__group">
+                <label class="input">
+                  <span>Период</span>
+                  <select name="period">
+                    <option value="all">Все время</option>
+                    <option value="today">Сегодня</option>
+                    <option value="yesterday">Вчера</option>
+                    <option value="7">Последние 7 дней</option>
+                    <option value="30">Последние 30 дней</option>
+                    <option value="month">Этот месяц</option>
+                    <option value="prev_month">Прошлый месяц</option>
+                    <option value="custom">Произвольный</option>
+                  </select>
+                </label>
+                <label class="input">
+                  <span>С</span>
+                  <input type="date" name="from" />
+                </label>
+                <label class="input">
+                  <span>По</span>
+                  <input type="date" name="to" />
+                </label>
+              </div>
+              <div class="filters__group">
+                <label class="input">
+                  <span>Тестер</span>
+                  <select name="tester" id="tester-select">
+                    <option value="all">Все</option>
+                    <option value="none">Не назначен</option>
+                  </select>
+                </label>
+              </div>
+              <div class="filters__group">
+                <label class="input">
+                  <span>Сумма от</span>
+                  <input type="number" name="amount_from" min="0" step="10" />
+                </label>
+                <label class="input">
+                  <span>Сумма до</span>
+                  <input type="number" name="amount_to" min="0" step="10" />
+                </label>
+              </div>
+            </form>
+
+            <div class="bulk-actions" id="bulk-actions" hidden>
+              <div class="bulk-actions__info">
+                <span id="bulk-count">0</span> заказов выбрано
+              </div>
+              <div class="bulk-actions__controls">
+                <label>
+                  <select id="bulk-status">
+                    <option value="">Изменить статус</option>
+                    <option value="paid">💰 Подтвердить оплату</option>
+                    <option value="in_progress">🔄 Взять в работу</option>
+                    <option value="completed">✅ Завершить</option>
+                    <option value="cancelled">❌ Отменить</option>
+                  </select>
+                </label>
+                <label>
+                  <select id="bulk-tester">
+                    <option value="">Назначить тестера</option>
+                    <option value="none">Снять тестера</option>
+                  </select>
+                </label>
+                <button class="btn btn--ghost" id="bulk-export">Экспортировать выбранные</button>
+                <button class="btn btn--danger" id="bulk-delete">Удалить выбранные</button>
+                <button class="btn btn--soft" id="bulk-clear">Снять выделение</button>
+              </div>
+            </div>
+
+            <div class="table-wrapper">
+              <table class="orders-table" id="orders-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="select-all" /></th>
+                    <th data-sort="orderNumber"># Заказ</th>
+                    <th data-sort="createdAt">Дата создания</th>
+                    <th data-sort="client">Клиент</th>
+                    <th data-sort="packageType">Пакет</th>
+                    <th data-sort="geo">GEO</th>
+                    <th data-sort="priceEur">Сумма</th>
+                    <th data-sort="status">Статус</th>
+                    <th data-sort="testerId">Тестер</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <div class="table-footer__summary" id="table-summary"></div>
+              <div class="table-footer__pagination">
+                <label>
+                  <span>На странице</span>
+                  <select id="page-size">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                  </select>
+                </label>
+                <nav class="pagination" id="pagination"></nav>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <dialog class="modal" id="order-modal">
+      <article class="modal__body">
+        <button class="modal__close" data-close>✕</button>
+        <div id="order-detail"></div>
+      </article>
+    </dialog>
+
+    <dialog class="modal" id="note-modal">
+      <article class="modal__body">
+        <button class="modal__close" data-close>✕</button>
+        <h3>Добавить заметку</h3>
+        <textarea id="note-text" rows="5" placeholder="Что важно зафиксировать?" required></textarea>
+        <div class="modal__footer">
+          <button class="btn btn--ghost" data-close>Отмена</button>
+          <button class="btn btn--primary" id="save-note">Сохранить</button>
+        </div>
+      </article>
+    </dialog>
+
+    <dialog class="modal" id="status-modal">
+      <article class="modal__body">
+        <button class="modal__close" data-close>✕</button>
+        <h3>Изменить статус</h3>
+        <p class="modal__text" id="status-modal-text"></p>
+        <label class="input">
+          <span>Комментарий</span>
+          <textarea id="status-comment" rows="4"></textarea>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="status-notify" checked />
+          <span>Отправить уведомление клиенту</span>
+        </label>
+        <div class="modal__footer">
+          <button class="btn btn--ghost" data-close>Отмена</button>
+          <button class="btn btn--primary" id="confirm-status">Подтвердить</button>
+        </div>
+      </article>
+    </dialog>
+
+    <div class="toast-container" id="toast"></div>
+  </body>
+</html>
