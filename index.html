@@ -146,6 +146,14 @@
       font-size: 16px;
     }
 
+    .hero-actions {
+      margin-top: 28px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
     .pricing-card {
       margin-top: 56px;
       padding: 40px clamp(24px, 4vw, 52px);
@@ -324,14 +332,14 @@
       -moz-appearance: textfield;
     }
 
-    .addons {
+    .payout-options {
       display: grid;
       gap: 12px;
     }
 
-    .addon-row {
+    .payout-option {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 10px;
       padding: 12px 14px;
       border-radius: 14px;
@@ -340,9 +348,22 @@
       font-size: 14px;
     }
 
-    .addon-row input {
+    .payout-option input {
       width: auto;
       accent-color: var(--accent-strong);
+      margin-top: 4px;
+    }
+
+    .payout-option span {
+      display: block;
+      line-height: 1.4;
+    }
+
+    .payout-option small {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: 12px;
     }
 
     .calc-summary {
@@ -706,6 +727,10 @@
         <h1>Проверяем реальные платежи в сложных GEO</h1>
         <p>Готовим чек-листы, делаем живые транзакции и фиксируем результат на видео. Проверяем карты, локальные кошельки, ваучеры и мобильные методы.</p>
         <p>Работаем с iGaming, подписками, сервисами и финтехом. Все кейсы выполняют локальные операторы на реальных устройствах.</p>
+        <div class="hero-actions">
+          <a id="heroStartBtn" class="btn" href="#">Начать тест</a>
+          <a class="btn secondary" data-telegram-link href="#" target="_blank" rel="noopener">Написать в Telegram</a>
+        </div>
       </div>
     </section>
 
@@ -750,46 +775,32 @@
             <div class="calc-fields">
               <div class="calc-field">
                 <label for="calcCountry">Страна (GEO)</label>
-                <select id="calcCountry">
-                  <option value="IN">🇮🇳 Индия</option>
-                  <option value="PK">🇵🇰 Пакистан</option>
-                  <option value="ID">🇮🇩 Индонезия</option>
-                  <option value="MY">🇲🇾 Малайзия</option>
-                  <option value="EG">🇪🇬 Египет</option>
-                  <option value="CI">🇨🇮 Кот-д'Ивуар</option>
-                  <option value="UZ">🇺🇿 Узбекистан</option>
-                  <option value="AZ">🇦🇿 Азербайджан</option>
-                  <option value="KZ">🇰🇿 Казахстан</option>
-                  <option value="TH">🇹🇭 Таиланд</option>
-                  <option value="AR">🇦🇷 Аргентина</option>
-                </select>
+                <select id="calcCountry"></select>
+              </div>
+              <div class="calc-field">
+                <label for="calcMethod">Метод оплаты</label>
+                <select id="calcMethod"></select>
               </div>
               <div class="calc-field">
                 <label for="testsCount">Количество тестов</label>
                 <input id="testsCount" type="number" min="1" value="1" step="1" />
               </div>
               <div class="calc-field">
-                <label>Дополнительные опции</label>
-                <div class="addons">
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="20" data-label="Детальный UX-отчёт"> Детальный UX-отчёт (+€20)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="15" data-label="Срочный SLA 24ч"> Срочный SLA 24ч (+€15)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="85" data-label="Ещё один метод/валюта"> Ещё один метод/валюта (+€85)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="45" data-label="KYC на платформе теста"> KYC на платформе теста (+€45)</label>
-                </div>
+                <label>Выплата и KYC</label>
+                <div id="payoutOptions" class="payout-options"></div>
               </div>
             </div>
             <aside class="calc-summary">
               <div>Итог</div>
               <div id="calcTotal" class="calc-total">€85</div>
               <div id="calcNote" class="calc-note"></div>
-              <a id="calcCta" class="btn" href="#">Начать тест за €85</a>
-              <a class="btn secondary" href="report_sample.pdf" target="_blank" rel="noopener">Скачать пример отчёта (PDF)</a>
+              <a id="calcCta" class="btn" href="#">Отправить в Telegram</a>
             </aside>
           </div>
           <div class="calculator-extra">
             <p>Нету нужного гео? Напишите нам, скорее всего мы его покроем!</p>
             <div class="calculator-contacts">
-              <a data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Telegram</a>
+              <a data-telegram-link href="#" target="_blank" rel="noopener">Telegram</a>
               <a href="mailto:hello@example.com">hello@example.com</a>
             </div>
           </div>
@@ -837,8 +848,9 @@
             <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
             <div class="pill">Email: <strong>hello@example.com</strong></div>
             <div class="pill">SLA ответа · 4 часа</div>
+            <a id="ctaStartBtn" class="btn" href="#">Начать тест</a>
+            <a class="btn secondary" data-telegram-link href="#" target="_blank" rel="noopener">Написать в Telegram</a>
             <a class="btn" href="mailto:hello@example.com?subject=Start%20Payment%20QA">Запросить предложение</a>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Написать в Telegram</a>
           </div>
         </div>
       </div>
@@ -871,73 +883,228 @@
   </footer>
 
   <script>
-    const basePrice = 85;
-    const discountPerBundle = 10;
-    const bundleSize = 5;
+    const PAYOUT_LABELS = {
+      'payout.option.none': { title: 'Выплата не нужна', description: 'Только проведение платежей без вывода средств' },
+      'payout.option.withdraw': { title: 'Нужна выплата', description: 'Выведем средства на ваш счёт после тестов' },
+      'payout.option.kyc': { title: 'Нужен KYC', description: 'Подготовим документы и пройдём верификацию' },
+    };
+
+    const state = {
+      meta: null,
+      botUsername: '',
+      payoutMap: new Map(),
+      currentPayload: null,
+    };
+
     const currencyFormat = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
     const countrySelect = document.getElementById('calcCountry');
+    const methodSelect = document.getElementById('calcMethod');
     const testsInput = document.getElementById('testsCount');
-    const addons = Array.from(document.querySelectorAll('.addon'));
+    const payoutContainer = document.getElementById('payoutOptions');
     const totalEl = document.getElementById('calcTotal');
     const noteEl = document.getElementById('calcNote');
     const ctaEl = document.getElementById('calcCta');
+    const heroStartBtn = document.getElementById('heroStartBtn');
+    const ctaStartBtn = document.getElementById('ctaStartBtn');
 
-    function calculateTotal() {
-      const rawValue = testsInput.value.trim();
-      const parsedValue = parseInt(rawValue, 10);
-      const count = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
+    function encodePayload(data) {
+      const json = JSON.stringify(data);
+      const base64 = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode('0x' + p1)));
+      return base64.replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+    }
 
-      if (rawValue === '') {
-        // Allow пользователю временно очистить поле ввода, не подставляя значение обратно
-      } else if (String(count) !== rawValue) {
-        testsInput.value = String(count);
-      }
+    function populateGeos(geos) {
+      countrySelect.innerHTML = '';
+      geos.forEach((geo, index) => {
+        const option = document.createElement('option');
+        option.value = geo.code;
+        option.textContent = `${geo.flag} ${geo.name}`;
+        if (index === 0) option.selected = true;
+        countrySelect.appendChild(option);
+      });
+    }
 
-      const baseTotal = basePrice * count;
-      const discount = Math.floor(count / bundleSize) * discountPerBundle;
-      const addonsTotal = addons.filter(a => a.checked).reduce((sum, addon) => sum + Number(addon.dataset.price), 0);
-      const total = baseTotal - discount + addonsTotal;
+    function populatePayoutOptions(options) {
+      payoutContainer.innerHTML = '';
+      state.payoutMap.clear();
+      options.forEach((option, index) => {
+        state.payoutMap.set(option.key, option);
+        const labelInfo = PAYOUT_LABELS[option.key] || { title: option.key, description: '' };
+        const wrapper = document.createElement('label');
+        wrapper.className = 'payout-option';
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'payout';
+        radio.value = option.key;
+        radio.checked = index === 0;
+        const textWrap = document.createElement('span');
+        const title = document.createElement('strong');
+        title.textContent = labelInfo.title;
+        const description = document.createElement('small');
+        const surchargeText = option.surcharge ? `Доплата ${currencyFormat.format(option.surcharge)}` : 'Без доплаты';
+        description.textContent = labelInfo.description ? `${surchargeText} • ${labelInfo.description}` : surchargeText;
+        textWrap.appendChild(title);
+        textWrap.appendChild(description);
+        wrapper.appendChild(radio);
+        wrapper.appendChild(textWrap);
+        payoutContainer.appendChild(wrapper);
+      });
+    }
 
-      const formatted = currencyFormat.format(total);
-      totalEl.textContent = formatted;
-
-      if (discount > 0 || addonsTotal > 0) {
-        const discountText = discount > 0 ? `Скидка: −${currencyFormat.format(discount)}` : null;
-        const addonsText = addonsTotal > 0 ? `Опции: +${currencyFormat.format(addonsTotal)}` : null;
-        noteEl.textContent = [discountText, addonsText].filter(Boolean).join(' · ');
+    function updateMethodOptions() {
+      const geo = countrySelect.value;
+      const methods = (state.meta?.paymentMethods?.[geo] || []).slice();
+      methodSelect.innerHTML = '';
+      if (!methods.length) {
+        const option = document.createElement('option');
+        option.value = 'Уточним метод в чате';
+        option.textContent = 'Уточнить метод в чате';
+        methodSelect.appendChild(option);
       } else {
-        noteEl.textContent = '';
-      }
-
-      const selectedAddons = addons.filter(a => a.checked);
-      const addonCount = selectedAddons.length;
-      const geoValue = countrySelect ? countrySelect.value : 'IN';
-
-      if (ctaEl) {
-        const payloadParts = [
-          'calc',
-          `geo${geoValue}`,
-          `tests${count}`,
-          addonCount ? `opt${addonCount}` : 'opt0',
-          `total${Math.round(total)}`
-        ];
-
-        ctaEl.textContent = `Начать тест за ${formatted}`;
-        ctaEl.dataset.startPayload = payloadParts.join('_');
-        ctaEl.dataset.geo = geoValue;
-        ctaEl.dataset.tests = String(count);
-        ctaEl.dataset.total = String(Math.round(total));
-        ctaEl.dataset.addons = String(addonCount);
+        methods.forEach((method, index) => {
+          const option = document.createElement('option');
+          option.value = method;
+          option.textContent = method;
+          if (index === 0) option.selected = true;
+          methodSelect.appendChild(option);
+        });
       }
     }
 
-    countrySelect.addEventListener('change', calculateTotal);
-    testsInput.addEventListener('input', calculateTotal);
-    addons.forEach(addon => addon.addEventListener('change', calculateTotal));
+    function getSelectedPayout() {
+      const selected = payoutContainer.querySelector('input[name="payout"]:checked');
+      if (!selected) return null;
+      return state.payoutMap.get(selected.value) || null;
+    }
 
-    calculateTotal();
+    function buildPayload(selection) {
+      if (!selection.payout) return null;
+      const payload = {
+        geo: selection.geo,
+        method: selection.method,
+        tests: selection.tests,
+        payout: selection.payout.key,
+        withdraw: Boolean(selection.payout.withdraw_required),
+        kyc: Boolean(selection.payout.kyc_required),
+        price: Math.round(selection.total),
+      };
+      return `o1_${encodePayload(payload)}`;
+    }
 
+    function updateTelegramLinks() {
+      document.querySelectorAll('[data-telegram-link]').forEach((link) => {
+        if (state.botUsername) {
+          link.href = `https://t.me/${state.botUsername}?start=start`;
+          link.target = '_blank';
+        } else {
+          link.href = '#';
+          link.target = '_self';
+        }
+      });
+      document.querySelectorAll('.telegram-handle').forEach((el) => {
+        el.textContent = state.botUsername ? `@${state.botUsername}` : '@bot';
+      });
+    }
+
+    function calculateTotal() {
+      if (!state.meta) {
+        state.currentPayload = null;
+        return;
+      }
+      const geo = countrySelect.value;
+      const method = methodSelect.value || 'Уточним в чате';
+      const testsValue = parseInt(testsInput.value, 10);
+      const tests = Number.isFinite(testsValue) && testsValue > 0 ? testsValue : 1;
+      if (tests !== testsValue) {
+        testsInput.value = String(tests);
+      }
+      const payout = getSelectedPayout();
+      const basePrice = state.meta.pricing?.base || 85;
+      const surcharge = payout ? Number(payout.surcharge || 0) : 0;
+      const total = basePrice * tests + surcharge;
+      totalEl.textContent = currencyFormat.format(total);
+      const geoLabel = countrySelect.selectedOptions[0]?.textContent || geo;
+      const payoutLabel = PAYOUT_LABELS[payout?.key || '']?.title || 'Без выплаты';
+      noteEl.textContent = `${geoLabel} · ${method} · ${payoutLabel}`;
+      ctaEl.textContent = `Отправить в Telegram — ${currencyFormat.format(total)}`;
+      heroStartBtn.textContent = `Начать тест — ${currencyFormat.format(total)}`;
+      ctaStartBtn.textContent = `Начать тест — ${currencyFormat.format(total)}`;
+      const selection = { geo, method, tests, payout, total };
+      state.currentPayload = buildPayload(selection);
+    }
+
+    function openTelegram(payload) {
+      if (!state.botUsername) {
+        alert('Телеграм-бот временно недоступен. Попробуйте позже.');
+        return;
+      }
+      const deeplink = `https://t.me/${state.botUsername}?start=${encodeURIComponent(payload)}`;
+      window.open(deeplink, '_blank');
+    }
+
+    function handleOpenTelegram(event) {
+      event.preventDefault();
+      if (!state.currentPayload) {
+        alert('Не удалось сформировать заявку. Попробуйте обновить страницу.');
+        return;
+      }
+      openTelegram(state.currentPayload);
+    }
+
+    function handleOrderButton(event) {
+      event.preventDefault();
+      const packageType = event.currentTarget.dataset.package;
+      const presets = { single: 1, mini: 5, retainer: 10 };
+      const preset = presets[packageType] || 1;
+      testsInput.value = String(preset);
+      calculateTotal();
+      if (!state.currentPayload) {
+        alert('Не удалось сформировать заявку. Попробуйте обновить страницу.');
+        return;
+      }
+      openTelegram(state.currentPayload);
+    }
+
+    async function initLanding() {
+      try {
+        const response = await fetch('/api/meta');
+        if (!response.ok) throw new Error('Meta request failed');
+        const meta = await response.json();
+        state.meta = meta;
+        state.botUsername = meta.bot?.username || '';
+        updateTelegramLinks();
+        if (Array.isArray(meta.geos) && meta.geos.length) {
+          populateGeos(meta.geos);
+        }
+        if (Array.isArray(meta.payoutOptions)) {
+          populatePayoutOptions(meta.payoutOptions);
+        }
+        updateMethodOptions();
+        calculateTotal();
+      } catch (error) {
+        console.error('Не удалось загрузить данные калькулятора', error);
+      }
+
+      countrySelect.addEventListener('change', () => {
+        updateMethodOptions();
+        calculateTotal();
+      });
+      methodSelect.addEventListener('change', calculateTotal);
+      testsInput.addEventListener('input', calculateTotal);
+      payoutContainer.addEventListener('change', calculateTotal);
+      ctaEl.addEventListener('click', handleOpenTelegram);
+      heroStartBtn.addEventListener('click', handleOpenTelegram);
+      ctaStartBtn.addEventListener('click', handleOpenTelegram);
+      document.querySelectorAll('.order-btn').forEach((btn) => {
+        btn.addEventListener('click', handleOrderButton);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', initLanding);
+  </script>
+
+  <script>
     const modules = {
       asia: {
         title: 'Азия',
@@ -987,7 +1154,7 @@
       const config = modules[activeKey];
       modulesGrid.innerHTML = '';
 
-      config.methods.forEach(method => {
+      config.methods.forEach((method) => {
         const card = document.createElement('article');
         card.className = 'module-card';
         card.innerHTML = `
@@ -1001,7 +1168,7 @@
         modulesGrid.appendChild(card);
       });
 
-      Array.from(moduleSwitcher.children).forEach(button => {
+      Array.from(moduleSwitcher.children).forEach((button) => {
         button.classList.toggle('active', button.dataset.key === activeKey);
       });
     }
@@ -1020,52 +1187,6 @@
     });
 
     renderModules(Object.keys(modules)[0]);
-  </script>
-
-  <script>
-    // Telegram Bot integration
-    const BOT_USERNAME = 'your_bot_here'; // Замените на реальное имя бота
-    const geoSelect = document.getElementById('calcCountry');
-
-    const updateTelegramLinks = () => {
-      document.querySelectorAll('[data-telegram-link]').forEach(link => {
-        link.href = `https://t.me/${BOT_USERNAME}`;
-      });
-
-      document.querySelectorAll('.telegram-handle').forEach(el => {
-        el.textContent = `@${BOT_USERNAME}`;
-      });
-    };
-
-    const openTelegram = (payload) => {
-      const deeplink = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
-      window.open(deeplink, '_blank');
-    };
-
-    updateTelegramLinks();
-
-    document.querySelectorAll('.order-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        const packageType = btn.dataset.package;
-        const geo = geoSelect ? geoSelect.value : 'IN';
-
-        openTelegram(`pkg_${packageType}_geo_${geo}`);
-      });
-    });
-
-    const calculatorBtn = document.getElementById('calcCta');
-    if (calculatorBtn) {
-      calculatorBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        const defaultGeo = geoSelect ? geoSelect.value : 'IN';
-        const payload = calculatorBtn.dataset.startPayload || `calc_geo${defaultGeo}_tests1`;
-
-        openTelegram(payload);
-      });
-    }
   </script>
 </body>
 </html>
