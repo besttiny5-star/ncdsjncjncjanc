@@ -36,6 +36,8 @@ class Config:
     encryption_key: Optional[bytes]
     default_language: str
     geo_whitelist: List[str]
+    web_host: str
+    web_port: int
 
 
 def load_config() -> Config:
@@ -67,6 +69,12 @@ def load_config() -> Config:
         )
     )
 
+    host = os.getenv("WEB_APP_HOST", "0.0.0.0")
+    try:
+        port = int(os.getenv("WEB_APP_PORT", "8080"))
+    except ValueError:
+        port = 8080
+
     return Config(
         bot_token=token,
         db_path=db_path,
@@ -77,4 +85,6 @@ def load_config() -> Config:
         encryption_key=encryption_key,
         default_language=default_lang,
         geo_whitelist=geo_whitelist,
+        web_host=host,
+        web_port=port,
     )
