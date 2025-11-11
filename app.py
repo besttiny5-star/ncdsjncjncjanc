@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
 
 from aiogram import Bot, Dispatcher
 
@@ -10,6 +11,7 @@ from payment_qa_bot.models.db import OrdersRepository
 from payment_qa_bot.routers.admin import get_admin_router
 from payment_qa_bot.routers.public import get_public_router
 from payment_qa_bot.services.security import CredentialEncryptor
+from payment_qa_bot.web.server import run_web_app
 
 logging.basicConfig(level=logging.INFO)
 
@@ -28,7 +30,13 @@ async def main() -> None:
     encryptor = CredentialEncryptor(config.encryption_key)
     bot = Bot(token=config.bot_token, parse_mode="HTML")
     dp = build_dispatcher(repo, encryptor, config)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    web_task = asyncio.create_task(run_web_app(config, repo, encryptor))
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        web_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await web_task
 
 
 if __name__ == "__main__":

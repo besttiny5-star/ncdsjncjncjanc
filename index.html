@@ -146,6 +146,14 @@
       font-size: 16px;
     }
 
+    .hero-actions {
+      margin-top: 36px;
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
     .pricing-card {
       margin-top: 56px;
       padding: 40px clamp(24px, 4vw, 52px);
@@ -297,6 +305,12 @@
       margin-bottom: 6px;
     }
 
+    .calc-hint {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
     select,
     input[type="number"] {
       width: 100%;
@@ -324,25 +338,42 @@
       -moz-appearance: textfield;
     }
 
-    .addons {
+    .payout-options {
       display: grid;
       gap: 12px;
     }
 
-    .addon-row {
+    .payout-option {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(124, 58, 237, 0.26);
-      background: rgba(124, 58, 237, 0.12);
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      background: rgba(12, 18, 35, 0.72);
+      transition: border 0.2s ease, background 0.2s ease;
       font-size: 14px;
     }
 
-    .addon-row input {
-      width: auto;
+    .payout-option input {
+      margin-top: 4px;
       accent-color: var(--accent-strong);
+    }
+
+    .payout-option strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .payout-option span {
+      color: var(--muted);
+      display: block;
+    }
+
+    .payout-option.selected {
+      border-color: rgba(124, 58, 237, 0.6);
+      background: rgba(124, 58, 237, 0.12);
     }
 
     .calc-summary {
@@ -359,7 +390,7 @@
       font-weight: 700;
     }
 
-    .calc-note {
+    .calc-meta {
       color: var(--muted);
       font-size: 14px;
       min-height: 20px;
@@ -706,6 +737,10 @@
         <h1>Проверяем реальные платежи в сложных GEO</h1>
         <p>Готовим чек-листы, делаем живые транзакции и фиксируем результат на видео. Проверяем карты, локальные кошельки, ваучеры и мобильные методы.</p>
         <p>Работаем с iGaming, подписками, сервисами и финтехом. Все кейсы выполняют локальные операторы на реальных устройствах.</p>
+        <div class="hero-actions">
+          <a class="btn" data-action="start-test" href="#calculator">Начать тест</a>
+          <a class="btn secondary" data-action="write-telegram" href="#">Написать в Telegram</a>
+        </div>
       </div>
     </section>
 
@@ -736,7 +771,7 @@
           <div class="enterprise">
             <h3>Нужны кастомные сценарии или SLA?</h3>
             <p>Подготовим план тестирования под ваш продукт, соберём выделенную команду и договоримся о таймлайне.</p>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Связаться с командой</a>
+            <a class="btn secondary" data-action="write-telegram" href="#">Связаться с командой</a>
           </div>
         </div>
       </div>
@@ -769,27 +804,28 @@
                 <input id="testsCount" type="number" min="1" value="1" step="1" />
               </div>
               <div class="calc-field">
-                <label>Дополнительные опции</label>
-                <div class="addons">
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="20" data-label="Детальный UX-отчёт"> Детальный UX-отчёт (+€20)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="15" data-label="Срочный SLA 24ч"> Срочный SLA 24ч (+€15)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="85" data-label="Ещё один метод/валюта"> Ещё один метод/валюта (+€85)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="45" data-label="KYC на платформе теста"> KYC на платформе теста (+€45)</label>
-                </div>
+                <label for="paymentMethod">Метод оплаты</label>
+                <input id="paymentMethod" type="text" placeholder="Например, UPI" autocomplete="off" list="paymentMethodList" />
+                <datalist id="paymentMethodList"></datalist>
+                <p class="calc-hint">Мы подставляем популярные методы по выбранному GEO. Можно вписать свой вариант.</p>
+              </div>
+              <div class="calc-field">
+                <label>Вариант выплаты</label>
+                <div id="payoutOptions" class="payout-options"></div>
               </div>
             </div>
             <aside class="calc-summary">
               <div>Итог</div>
               <div id="calcTotal" class="calc-total">€85</div>
-              <div id="calcNote" class="calc-note"></div>
-              <a id="calcCta" class="btn" href="#">Начать тест за €85</a>
-              <a class="btn secondary" href="report_sample.pdf" target="_blank" rel="noopener">Скачать пример отчёта (PDF)</a>
+              <div id="calcBreakdown" class="calc-meta"></div>
+              <a id="calcCta" class="btn" href="#">Начать тест</a>
+              <a class="btn secondary" data-action="write-telegram" href="#">Написать в Telegram</a>
             </aside>
           </div>
           <div class="calculator-extra">
             <p>Нету нужного гео? Напишите нам, скорее всего мы его покроем!</p>
             <div class="calculator-contacts">
-              <a data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Telegram</a>
+              <a data-action="write-telegram" href="#">Telegram</a>
               <a href="mailto:hello@example.com">hello@example.com</a>
             </div>
           </div>
@@ -837,8 +873,8 @@
             <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
             <div class="pill">Email: <strong>hello@example.com</strong></div>
             <div class="pill">SLA ответа · 4 часа</div>
-            <a class="btn" href="mailto:hello@example.com?subject=Start%20Payment%20QA">Запросить предложение</a>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Написать в Telegram</a>
+            <a class="btn" data-action="start-test" href="#calculator">Начать тест</a>
+            <a class="btn secondary" data-action="write-telegram" href="#">Написать в Telegram</a>
           </div>
         </div>
       </div>
@@ -871,201 +907,355 @@
   </footer>
 
   <script>
-    const basePrice = 85;
-    const discountPerBundle = 10;
-    const bundleSize = 5;
+    const BOT_USERNAME = 'your_bot_here';
+    const API_BASE = '';
     const currencyFormat = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
-    const countrySelect = document.getElementById('calcCountry');
-    const testsInput = document.getElementById('testsCount');
-    const addons = Array.from(document.querySelectorAll('.addon'));
-    const totalEl = document.getElementById('calcTotal');
-    const noteEl = document.getElementById('calcNote');
-    const ctaEl = document.getElementById('calcCta');
+    const fallbackCatalog = (() => {
+      const geoOptions = Array.from(document.querySelectorAll('#calcCountry option')).map(option => ({
+        code: option.value,
+        label: option.textContent
+      }));
+      return {
+        geo: geoOptions,
+        paymentMethods: {
+          IN: ['UPI', 'PhonePe', 'PayTM', 'Google Pay', 'Amazon Pay'],
+          BD: ['bKash', 'Nagad', 'Rocket', 'Upay'],
+          PK: ['JazzCash', 'Easypaisa', 'Nayapay'],
+          ID: ['GoPay', 'OVO', 'DANA', 'LinkAja', 'ShopeePay', 'GrabPay', 'Boost', 'QRIS'],
+          MY: ["Touch 'n Go", 'Boost', 'GrabPay', 'ShopeePay', 'DuitNow'],
+          TH: ['PromptPay', 'TrueMoney'],
+          PH: ['GCash', 'PayMaya', 'GrabPay', 'ShopeePay'],
+          EG: ['Vodafone Cash', 'Etisalat Cash', 'Orange Money', 'Fawry', 'Meeza'],
+          KZ: ['Kaspi Pay', 'Bank Transfer'],
+          UZ: ['Payme', 'UzCard', 'Humo'],
+          CI: ['Orange Money', 'MTN Money', 'Moov Money', 'Wave'],
+          AR: ['Mercado Pago', 'Bank Transfer']
+        },
+        payoutOptions: [
+          { key: 'payout.option.none', surcharge: 0, withdraw: false, kyc: false, labels: { ru: 'Выплата не нужна (0 €)', en: 'No payout needed (0 €)' } },
+          { key: 'payout.option.withdraw', surcharge: 10, withdraw: true, kyc: false, labels: { ru: 'Нужна выплата (+10 €)', en: 'Need payout (+10 €)' } },
+          { key: 'payout.option.kyc', surcharge: 25, withdraw: true, kyc: true, labels: { ru: 'Полная KYC (+25 €)', en: 'Full KYC verification (+25 €)' } }
+        ],
+        basePricePerTest: 85
+      };
+    })();
 
-    function calculateTotal() {
-      const rawValue = testsInput.value.trim();
-      const parsedValue = parseInt(rawValue, 10);
-      const count = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
-
-      if (rawValue === '') {
-        // Allow пользователю временно очистить поле ввода, не подставляя значение обратно
-      } else if (String(count) !== rawValue) {
-        testsInput.value = String(count);
-      }
-
-      const baseTotal = basePrice * count;
-      const discount = Math.floor(count / bundleSize) * discountPerBundle;
-      const addonsTotal = addons.filter(a => a.checked).reduce((sum, addon) => sum + Number(addon.dataset.price), 0);
-      const total = baseTotal - discount + addonsTotal;
-
-      const formatted = currencyFormat.format(total);
-      totalEl.textContent = formatted;
-
-      if (discount > 0 || addonsTotal > 0) {
-        const discountText = discount > 0 ? `Скидка: −${currencyFormat.format(discount)}` : null;
-        const addonsText = addonsTotal > 0 ? `Опции: +${currencyFormat.format(addonsTotal)}` : null;
-        noteEl.textContent = [discountText, addonsText].filter(Boolean).join(' · ');
-      } else {
-        noteEl.textContent = '';
-      }
-
-      const selectedAddons = addons.filter(a => a.checked);
-      const addonCount = selectedAddons.length;
-      const geoValue = countrySelect ? countrySelect.value : 'IN';
-
-      if (ctaEl) {
-        const payloadParts = [
-          'calc',
-          `geo${geoValue}`,
-          `tests${count}`,
-          addonCount ? `opt${addonCount}` : 'opt0',
-          `total${Math.round(total)}`
-        ];
-
-        ctaEl.textContent = `Начать тест за ${formatted}`;
-        ctaEl.dataset.startPayload = payloadParts.join('_');
-        ctaEl.dataset.geo = geoValue;
-        ctaEl.dataset.tests = String(count);
-        ctaEl.dataset.total = String(Math.round(total));
-        ctaEl.dataset.addons = String(addonCount);
-      }
-    }
-
-    countrySelect.addEventListener('change', calculateTotal);
-    testsInput.addEventListener('input', calculateTotal);
-    addons.forEach(addon => addon.addEventListener('change', calculateTotal));
-
-    calculateTotal();
-
-    const modules = {
-      asia: {
-        title: 'Азия',
-        methods: [
-          { name: 'UPI / PhonePe', country: 'Индия', type: 'Wallet / Bank' },
-          { name: 'JazzCash · Easypaisa', country: 'Пакистан', type: 'Wallet' },
-          { name: 'PromptPay', country: 'Таиланд', type: 'QR-pay' },
-          { name: "Touch 'n Go", country: 'Малайзия', type: 'Wallet' },
-          { name: 'DANA / OVO', country: 'Индонезия', type: 'Wallet' }
-        ]
-      },
-      africa: {
-        title: 'Африка & MENA',
-        methods: [
-          { name: 'M‑Pesa', country: 'Кения', type: 'Mobile Money' },
-          { name: 'Fawry', country: 'Египет', type: 'Cash Network' },
-          { name: 'MTN Mobile Money', country: 'Гана / Уганда', type: 'Mobile Money' },
-          { name: 'Orange Money', country: "Кот-д'Ивуар", type: 'Mobile Money' },
-          { name: 'Paymob', country: 'MENA', type: 'Card acquiring' }
-        ]
-      },
-      latam: {
-        title: 'LatAm',
-        methods: [
-          { name: 'PIX', country: 'Бразилия', type: 'Instant Pay' },
-          { name: 'SPEI', country: 'Мексика', type: 'Bank transfer' },
-          { name: 'PSE', country: 'Колумбия', type: 'Bank transfer' },
-          { name: 'Pago Fácil', country: 'Аргентина', type: 'Cash Network' },
-          { name: 'Boleto Bancário', country: 'Бразилия', type: 'Voucher' }
-        ]
-      },
-      cis: {
-        title: 'CIS & Восточная Европа',
-        methods: [
-          { name: 'Kaspi / Halyk', country: 'Казахстан', type: 'Bank transfer' },
-          { name: 'Payme / Apelsin', country: 'Узбекистан', type: 'Wallet' },
-          { name: 'Idram', country: 'Армения', type: 'Wallet' },
-          { name: 'ePay', country: 'Казахстан', type: 'Card acquiring' }
-        ]
-      }
+    const state = {
+      catalog: fallbackCatalog,
+      basePrice: fallbackCatalog.basePricePerTest,
+      payoutKey: fallbackCatalog.payoutOptions[0]?.key || 'payout.option.none'
     };
 
-    const moduleSwitcher = document.getElementById('moduleSwitcher');
-    const modulesGrid = document.getElementById('modulesGrid');
-
-    function renderModules(activeKey) {
-      const config = modules[activeKey];
-      modulesGrid.innerHTML = '';
-
-      config.methods.forEach(method => {
-        const card = document.createElement('article');
-        card.className = 'module-card';
-        card.innerHTML = `
-          <h3>${method.name}</h3>
-          <div class="module-tags">
-            <span class="module-tag">${method.country}</span>
-            <span class="module-tag">${method.type}</span>
-          </div>
-          <p>Тестируем успешные и негативные сценарии, снимаем видео, готовим чек-листы и фиксацию статусов.</p>
-        `;
-        modulesGrid.appendChild(card);
-      });
-
-      Array.from(moduleSwitcher.children).forEach(button => {
-        button.classList.toggle('active', button.dataset.key === activeKey);
-      });
-    }
-
-    Object.entries(modules).forEach(([key, value], index) => {
-      const button = document.createElement('button');
-      button.dataset.key = key;
-      button.type = 'button';
-      button.textContent = value.title;
-      button.addEventListener('click', () => renderModules(key));
-      moduleSwitcher.appendChild(button);
-
-      if (index === 0) {
-        button.classList.add('active');
-      }
-    });
-
-    renderModules(Object.keys(modules)[0]);
-  </script>
-
-  <script>
-    // Telegram Bot integration
-    const BOT_USERNAME = 'your_bot_here'; // Замените на реальное имя бота
-    const geoSelect = document.getElementById('calcCountry');
-
-    const updateTelegramLinks = () => {
-      document.querySelectorAll('[data-telegram-link]').forEach(link => {
-        link.href = `https://t.me/${BOT_USERNAME}`;
-      });
-
+    function updateTelegramLinks() {
       document.querySelectorAll('.telegram-handle').forEach(el => {
         el.textContent = `@${BOT_USERNAME}`;
       });
-    };
-
-    const openTelegram = (payload) => {
-      const deeplink = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
-      window.open(deeplink, '_blank');
-    };
-
-    updateTelegramLinks();
-
-    document.querySelectorAll('.order-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        const packageType = btn.dataset.package;
-        const geo = geoSelect ? geoSelect.value : 'IN';
-
-        openTelegram(`pkg_${packageType}_geo_${geo}`);
-      });
-    });
-
-    const calculatorBtn = document.getElementById('calcCta');
-    if (calculatorBtn) {
-      calculatorBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        const defaultGeo = geoSelect ? geoSelect.value : 'IN';
-        const payload = calculatorBtn.dataset.startPayload || `calc_geo${defaultGeo}_tests1`;
-
-        openTelegram(payload);
+      document.querySelectorAll('[data-action="write-telegram"]').forEach(link => {
+        link.href = `https://t.me/${BOT_USERNAME}?start=start`;
+        link.target = '_blank';
+        link.rel = 'noopener';
       });
     }
+
+    function openTelegram(payload) {
+      const deeplink = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
+      window.open(deeplink, '_blank');
+    }
+
+    async function loadCatalog() {
+      try {
+        const response = await fetch(`${API_BASE}/api/catalog`, { headers: { Accept: 'application/json' } });
+        if (!response.ok) {
+          return null;
+        }
+        const data = await response.json();
+        return {
+          geo: Array.isArray(data.geo) && data.geo.length ? data.geo : fallbackCatalog.geo,
+          paymentMethods: data.paymentMethods || fallbackCatalog.paymentMethods,
+          payoutOptions: data.payoutOptions || fallbackCatalog.payoutOptions,
+          basePricePerTest: data.basePricePerTest || fallbackCatalog.basePricePerTest
+        };
+      } catch (error) {
+        console.warn('Не удалось загрузить каталог из API', error);
+        return null;
+      }
+    }
+
+    function populateGeoSelect(geoList, select) {
+      if (!Array.isArray(geoList) || !geoList.length) {
+        return;
+      }
+      const current = select.value;
+      select.innerHTML = '';
+      geoList.forEach(item => {
+        const code = item.code || item;
+        const label = item.label || item;
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = label;
+        select.appendChild(option);
+      });
+      if (geoList.some(item => (item.code || item) === current)) {
+        select.value = current;
+      }
+    }
+
+    function renderPayoutOptions(options, container, onChange) {
+      container.innerHTML = '';
+      if (!Array.isArray(options) || !options.length) {
+        return;
+      }
+      if (!state.payoutKey) {
+        state.payoutKey = options[0].key;
+      }
+      options.forEach((option, index) => {
+        const label = document.createElement('label');
+        label.className = 'payout-option';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'payoutOption';
+        input.value = option.key;
+        if (option.key === state.payoutKey || (!state.payoutKey && index === 0)) {
+          input.checked = true;
+          label.classList.add('selected');
+          state.payoutKey = option.key;
+        }
+        input.addEventListener('change', () => {
+          state.payoutKey = option.key;
+          container.querySelectorAll('.payout-option').forEach(node => node.classList.remove('selected'));
+          label.classList.add('selected');
+          onChange();
+        });
+        const description = option.kyc
+          ? 'Полная KYC и локальные документы'
+          : option.withdraw
+            ? 'Требуется вывод средств или чек'
+            : 'Только успешная оплата';
+        const info = document.createElement('div');
+        const text = (option.labels && (option.labels.ru || option.labels.en)) || option.key;
+        info.innerHTML = `<strong>${text}</strong><span>${description}</span>`;
+        label.appendChild(input);
+        label.appendChild(info);
+        container.appendChild(label);
+      });
+    }
+
+    function updateMethodList(geo, input, datalist) {
+      const methods = state.catalog.paymentMethods[geo] || [];
+      datalist.innerHTML = '';
+      methods.forEach(method => {
+        const option = document.createElement('option');
+        option.value = method;
+        datalist.appendChild(option);
+      });
+      if (methods.length && !methods.includes(input.value)) {
+        input.value = methods[0];
+      }
+    }
+
+    function buildPayload(geo, tests, method, payout, total) {
+      const data = {
+        geo,
+        tests,
+        price_eur: Math.round(total)
+      };
+      if (method) {
+        data.payment_method = method;
+      }
+      if (payout?.withdraw) {
+        data.withdraw_required = true;
+      }
+      if (payout?.kyc) {
+        data.kyc_required = true;
+      }
+      const json = JSON.stringify(data);
+      const base64 = btoa(unescape(encodeURIComponent(json)))
+        .replace(/=+$/g, '')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_');
+      return `calc2_${base64}`;
+    }
+
+    async function setupCalculator() {
+      const countrySelect = document.getElementById('calcCountry');
+      const testsInput = document.getElementById('testsCount');
+      const paymentInput = document.getElementById('paymentMethod');
+      const methodList = document.getElementById('paymentMethodList');
+      const payoutContainer = document.getElementById('payoutOptions');
+      const totalEl = document.getElementById('calcTotal');
+      const breakdownEl = document.getElementById('calcBreakdown');
+      const ctaBtn = document.getElementById('calcCta');
+      const startButtons = Array.from(document.querySelectorAll('[data-action="start-test"]'));
+
+      if (!countrySelect || !testsInput || !paymentInput || !methodList || !payoutContainer || !totalEl || !breakdownEl || !ctaBtn) {
+        return;
+      }
+
+      const catalogFromApi = await loadCatalog();
+      if (catalogFromApi) {
+        state.catalog = catalogFromApi;
+      }
+      state.basePrice = state.catalog.basePricePerTest || fallbackCatalog.basePricePerTest;
+      populateGeoSelect(state.catalog.geo, countrySelect);
+      renderPayoutOptions(state.catalog.payoutOptions, payoutContainer, updateTotals);
+      updateMethodList(countrySelect.value, paymentInput, methodList);
+
+      function getSelectedPayout() {
+        return state.catalog.payoutOptions.find(item => item.key === state.payoutKey) || state.catalog.payoutOptions[0];
+      }
+
+      function updateTotals() {
+        let tests = parseInt(testsInput.value, 10);
+        if (!Number.isFinite(tests) || tests < 1) {
+          tests = 1;
+        }
+        testsInput.value = tests;
+        const payout = getSelectedPayout();
+        const total = state.basePrice * tests + (payout?.surcharge || 0);
+        totalEl.textContent = currencyFormat.format(total);
+        const parts = [`${currencyFormat.format(state.basePrice)} × ${tests} тест(а)`];
+        if (payout?.surcharge) {
+          parts.push(`+ ${currencyFormat.format(payout.surcharge)} за выплаты`);
+        }
+        breakdownEl.textContent = parts.join(' ');
+        const payload = buildPayload(countrySelect.value, tests, paymentInput.value.trim(), payout, total);
+        ctaBtn.textContent = `Начать тест за ${currencyFormat.format(total)}`;
+        ctaBtn.dataset.payload = payload;
+        startButtons.forEach(btn => {
+          btn.dataset.payload = payload;
+        });
+      }
+
+      countrySelect.addEventListener('change', () => {
+        updateMethodList(countrySelect.value, paymentInput, methodList);
+        updateTotals();
+      });
+      testsInput.addEventListener('input', updateTotals);
+      paymentInput.addEventListener('input', updateTotals);
+
+      ctaBtn.addEventListener('click', event => {
+        event.preventDefault();
+        if (ctaBtn.dataset.payload) {
+          openTelegram(ctaBtn.dataset.payload);
+        }
+      });
+      startButtons.forEach(btn => {
+        btn.addEventListener('click', event => {
+          event.preventDefault();
+          const payload = btn.dataset.payload || ctaBtn.dataset.payload;
+          if (payload) {
+            openTelegram(payload);
+          }
+        });
+      });
+
+      updateTotals();
+    }
+
+    function setupModules() {
+      const modules = {
+        asia: {
+          title: 'Азия',
+          methods: [
+            { name: 'UPI / PhonePe', country: 'Индия', type: 'Wallet / Bank' },
+            { name: 'JazzCash · Easypaisa', country: 'Пакистан', type: 'Wallet' },
+            { name: 'PromptPay', country: 'Таиланд', type: 'QR-pay' },
+            { name: "Touch 'n Go", country: 'Малайзия', type: 'Wallet' },
+            { name: 'DANA / OVO', country: 'Индонезия', type: 'Wallet' }
+          ]
+        },
+        africa: {
+          title: 'Африка & MENA',
+          methods: [
+            { name: 'M‑Pesa', country: 'Кения', type: 'Mobile Money' },
+            { name: 'Fawry', country: 'Египет', type: 'Cash Network' },
+            { name: 'MTN Mobile Money', country: 'Гана / Уганда', type: 'Mobile Money' },
+            { name: 'Orange Money', country: "Кот-д'Ивуар", type: 'Mobile Money' },
+            { name: 'Paymob', country: 'MENA', type: 'Card acquiring' }
+          ]
+        },
+        latam: {
+          title: 'LatAm',
+          methods: [
+            { name: 'PIX', country: 'Бразилия', type: 'Instant Pay' },
+            { name: 'SPEI', country: 'Мексика', type: 'Bank transfer' },
+            { name: 'PSE', country: 'Колумбия', type: 'Bank transfer' },
+            { name: 'Pago Fácil', country: 'Аргентина', type: 'Cash Network' },
+            { name: 'Boleto Bancário', country: 'Бразилия', type: 'Voucher' }
+          ]
+        },
+        cis: {
+          title: 'CIS & Восточная Европа',
+          methods: [
+            { name: 'Kaspi / Halyk', country: 'Казахстан', type: 'Bank transfer' },
+          { name: 'Payme / Apelsin', country: 'Узбекистан', type: 'Wallet' },
+            { name: 'Idram', country: 'Армения', type: 'Wallet' },
+            { name: 'ePay', country: 'Казахстан', type: 'Card acquiring' }
+          ]
+        }
+      };
+
+      const moduleSwitcher = document.getElementById('moduleSwitcher');
+      const modulesGrid = document.getElementById('modulesGrid');
+      if (!moduleSwitcher || !modulesGrid) {
+        return;
+      }
+
+      function renderModules(activeKey) {
+        const config = modules[activeKey];
+        if (!config) return;
+        modulesGrid.innerHTML = '';
+        config.methods.forEach(method => {
+          const card = document.createElement('article');
+          card.className = 'module-card';
+          card.innerHTML = `
+            <h3>${method.name}</h3>
+            <div class="module-tags">
+              <span class="module-tag">${method.country}</span>
+              <span class="module-tag">${method.type}</span>
+            </div>
+            <p>Тестируем успешные и негативные сценарии, снимаем видео, готовим чек-листы и фиксацию статусов.</p>
+          `;
+          modulesGrid.appendChild(card);
+        });
+        Array.from(moduleSwitcher.children).forEach(button => {
+          button.classList.toggle('active', button.dataset.key === activeKey);
+        });
+      }
+
+      Object.entries(modules).forEach(([key, value], index) => {
+        const button = document.createElement('button');
+        button.dataset.key = key;
+        button.type = 'button';
+        button.textContent = value.title;
+        button.addEventListener('click', () => renderModules(key));
+        moduleSwitcher.appendChild(button);
+        if (index === 0) {
+          button.classList.add('active');
+          renderModules(key);
+        }
+      });
+    }
+
+    function setupPackageButtons() {
+      const geoSelect = document.getElementById('calcCountry');
+      document.querySelectorAll('.order-btn').forEach(btn => {
+        btn.addEventListener('click', event => {
+          event.preventDefault();
+          const packageType = btn.dataset.package || 'single';
+          const geo = geoSelect ? geoSelect.value : 'IN';
+          openTelegram(`pkg_${packageType}_geo_${geo}`);
+        });
+      });
+    }
+
+    (async function init() {
+      updateTelegramLinks();
+      await setupCalculator();
+      setupModules();
+      setupPackageButtons();
+    })();
   </script>
 </body>
 </html>
