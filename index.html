@@ -788,7 +788,7 @@
               </div>
               <div class="calc-field">
                 <label for="testsCount">Количество тестов</label>
-                <input id="testsCount" type="number" min="1" value="1" step="1" />
+                <input id="testsCount" type="number" min="1" max="25" value="1" step="1" />
               </div>
               <div class="calc-field">
                 <span>Требуются выплаты?</span>
@@ -909,6 +909,7 @@
 
   <script>
     const BASE_PRICE = 85;
+    const MAX_TESTS = 25;
     const currencyFormat = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
     const PAYMENT_METHODS = {
@@ -975,12 +976,29 @@
       return payload;
     }
 
-    function calculateTotal() {
+    function normalizeTestsValue() {
       const rawValue = testsInput.value.trim();
+      if (rawValue === '') {
+        return { tests: 1, sanitizedValue: null };
+      }
+
       const parsedValue = parseInt(rawValue, 10);
-      const tests = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
-      if (String(tests) !== rawValue) {
-        testsInput.value = String(tests);
+      if (!Number.isFinite(parsedValue) || parsedValue < 1) {
+        return { tests: 1, sanitizedValue: '1' };
+      }
+
+      const clampedValue = Math.min(parsedValue, MAX_TESTS);
+      const sanitizedValue = String(clampedValue);
+      return {
+        tests: clampedValue,
+        sanitizedValue: sanitizedValue !== rawValue ? sanitizedValue : null
+      };
+    }
+
+    function calculateTotal() {
+      const { tests, sanitizedValue } = normalizeTestsValue();
+      if (sanitizedValue !== null) {
+        testsInput.value = sanitizedValue;
       }
 
       const payoutRadio = payoutInputs.find((input) => input.checked) || payoutInputs[0];
@@ -1021,6 +1039,12 @@
     });
     methodSelect.addEventListener('change', calculateTotal);
     testsInput.addEventListener('input', calculateTotal);
+    testsInput.addEventListener('blur', () => {
+      if (testsInput.value.trim() === '') {
+        testsInput.value = '1';
+        calculateTotal();
+      }
+    });
     payoutInputs.forEach((input) => input.addEventListener('change', calculateTotal));
     siteInput.addEventListener('input', calculateTotal);
     loginInput.addEventListener('input', calculateTotal);
