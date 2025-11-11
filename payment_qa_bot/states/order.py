@@ -6,11 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 class OrderStates(StatesGroup):
     GEO = State()
     METHOD = State()
-    TESTS = State()
-    ADDONS_WITHDRAW = State()
-    ADDONS_CUSTOM = State()
-    ADDONS_CUSTOM_TEXT = State()
-    ADDONS_KYC = State()
+    PAYOUT = State()
     COMMENTS = State()
     SITE_URL = State()
     CREDS_LOGIN = State()

@@ -24,17 +24,17 @@ TEXTS = TextCatalog(
         "en": {
             "start.site.invalid": "We could not read the order payload. Please open the link from the website again or start without parameters.",
             "start.tg": "Welcome! Let's create a new payment QA order. We'll guide you through the steps.",
-            "wizard.geo": "🌍 Step 1/9 — Select GEO\n\nChoose the country for testing:",
-            "wizard.method": "💳 Step 2/9 — Payment method\n\nType the payment method or provider that should be tested.",
-            "wizard.tests": "🧪 Step 3/9 — Number of tests\n\nSend an integer from 1 to 100.",
-            "wizard.withdraw": "4️⃣ Step 4/9 — Withdraw funds?\n\nShould testers withdraw funds from the account?",
-            "wizard.custom": "5️⃣ Step 5/9 — Custom interactions?\n\nDo you need any extra actions on the website?",
-            "wizard.custom.text": "Please describe the custom test scenario.",
-            "wizard.kyc": "6️⃣ Step 6/9 — KYC required?\n\nIf KYC is needed we will add €45 to the total.",
-            "wizard.comments": "7️⃣ Step 7/9 — Extra comments\n\nShare any context, links or attachments. Send text or choose Skip.",
-            "wizard.site": "8️⃣ Step 8/9 — Website URL\n\nSend the checkout page URL starting with http:// or https://.",
-            "wizard.login": "9️⃣ Step 9/9 — Login for testers\n\nSend the login if required or choose Skip.",
-            "wizard.password": "Password for testers\n\nSend the password or Skip.",
+            "wizard.geo": "🌍 Step 1/6 — Select GEO\n\nChoose the country for testing:",
+            "wizard.method": "💳 Step 2/6 — Payment method\n\nSelect the payment method to be tested from the list below.",
+            "wizard.payout": "💼 Step 3/6 — Payout requirements\n\nPlease select payout option:",
+            "wizard.invalid.payout": "Please choose one of the payout options.",
+            "payout.option.none": "No payout needed (0 €)",
+            "payout.option.withdraw": "Need payout (+10 €) — requires account with withdrawal capability",
+            "payout.option.kyc": "Need full KYC verification (+25 €) — requires local tester data",
+            "wizard.comments": "📝 Step 4/6 — Comments\n\nAny special comments or requests? Send text or choose Skip.",
+            "wizard.site": "🔗 Step 5/6 — Website URL\n\nSend the checkout page URL starting with http:// or https://.",
+            "wizard.login": "🔐 Step 6/6 — Login for testers\n\nSend the login if required or choose Skip.",
+            "wizard.password": "Password for testers\n\nSend the password or choose Skip.",
             "wizard.skip": "Skip",
             "wizard.back": "◀️ Back",
             "wizard.cancel": "❌ Cancel",
@@ -42,7 +42,7 @@ TEXTS = TextCatalog(
             "wizard.no": "No",
             "wizard.missing.custom_text": "Please describe the custom test scenario to continue.",
             "wizard.invalid.geo": "Please choose one of the suggested GEO buttons.",
-            "wizard.invalid.method": "The payment method should be 2-100 characters long.",
+            "wizard.invalid.method": "Please choose one of the available payment methods.",
             "wizard.invalid.tests": "The number of tests must be an integer from 1 to 100.",
             "wizard.invalid.url": "The URL must start with http:// or https://.",
             "wizard.invalid.comment": "Comments should not exceed 1000 characters.",
@@ -52,13 +52,10 @@ TEXTS = TextCatalog(
             "confirmation.body": (
                 "<b>Summary</b>\n"
                 "GEO: {geo}\n"
-                "Tests: {tests}\n"
-                "Withdraw funds: {withdraw}\n"
-                "Custom test: {custom}\n"
-                "KYC: {kyc}\n"
+                "Payment method: {method}\n"
+                "Payout option: {payout}\n"
                 "Website: {site}\n"
                 "Login: {login}\n"
-                "Payment method: {method}\n"
                 "Comments: {comments}\n"
                 "Total: €{total}\n\n"
                 "Ready to continue?"
@@ -94,16 +91,16 @@ TEXTS = TextCatalog(
         "ru": {
             "start.site.invalid": "Не удалось распознать параметры заявки. Откройте ссылку с сайта ещё раз или используйте /start без параметров.",
             "start.tg": "Привет! Давайте оформим заявку на QA платежей. Я помогу пройти все шаги.",
-            "wizard.geo": "🌍 Шаг 1/9 — Выбор GEO\n\nВыберите страну для тестирования:",
-            "wizard.method": "💳 Шаг 2/9 — Метод оплаты\n\nНапишите способ или сервис, который нужно протестировать.",
-            "wizard.tests": "🧪 Шаг 3/9 — Количество тестов\n\nОтправьте целое число от 1 до 100.",
-            "wizard.withdraw": "4️⃣ Шаг 4/9 — Выводить средства?\n\nНужно ли выводить деньги с аккаунта?",
-            "wizard.custom": "5️⃣ Шаг 5/9 — Дополнительный сценарий?\n\nНужны ли на сайте особые действия?",
-            "wizard.custom.text": "Опишите, пожалуйста, кастомный сценарий.",
-            "wizard.kyc": "6️⃣ Шаг 6/9 — Требуется KYC?\n\nПри включении добавим €45 к стоимости.",
-            "wizard.comments": "7️⃣ Шаг 7/9 — Комментарии\n\nОтправьте детали, ссылки или вложения. Можно пропустить.",
-            "wizard.site": "8️⃣ Шаг 8/9 — Сайт для теста\n\nОтправьте ссылку, начинающуюся с http:// или https://.",
-            "wizard.login": "9️⃣ Шаг 9/9 — Логин для тестеров\n\nПришлите логин или пропустите.",
+            "wizard.geo": "🌍 Шаг 1/6 — Выбор GEO\n\nВыберите страну для тестирования:",
+            "wizard.method": "💳 Шаг 2/6 — Метод оплаты\n\nВыберите способ оплаты для теста из списка ниже.",
+            "wizard.payout": "💼 Шаг 3/6 — Требования к выплатам\n\nВыберите нужный вариант:",
+            "wizard.invalid.payout": "Пожалуйста, выберите один из вариантов выплаты.",
+            "payout.option.none": "Выплата не нужна (0 €)",
+            "payout.option.withdraw": "Нужна выплата (+10 €) — требуется аккаунт с выводом",
+            "payout.option.kyc": "Нужна полная KYC-верификация (+25 €) — требуется локальный тестер",
+            "wizard.comments": "📝 Шаг 4/6 — Comments\n\nAny special comments or requests? Send text or choose Skip.",
+            "wizard.site": "🔗 Шаг 5/6 — Сайт для теста\n\nОтправьте ссылку, начинающуюся с http:// или https://.",
+            "wizard.login": "🔐 Шаг 6/6 — Логин для тестеров\n\nПришлите логин или пропустите.",
             "wizard.password": "Пароль для тестеров\n\nПришлите пароль или пропустите.",
             "wizard.skip": "Пропустить",
             "wizard.back": "◀️ Назад",
@@ -112,7 +109,7 @@ TEXTS = TextCatalog(
             "wizard.no": "Нет",
             "wizard.missing.custom_text": "Нужно описать сценарий, чтобы продолжить.",
             "wizard.invalid.geo": "Пожалуйста, выберите одну из предложенных стран.",
-            "wizard.invalid.method": "Метод оплаты должен содержать от 2 до 100 символов.",
+            "wizard.invalid.method": "Пожалуйста, выберите один из доступных способов оплаты.",
             "wizard.invalid.tests": "Количество тестов должно быть целым числом от 1 до 100.",
             "wizard.invalid.url": "Ссылка должна начинаться с http:// или https://.",
             "wizard.invalid.comment": "Комментарий не должен превышать 1000 символов.",
@@ -122,13 +119,10 @@ TEXTS = TextCatalog(
             "confirmation.body": (
                 "<b>Проверьте детали</b>\n"
                 "GEO: {geo}\n"
-                "Тесты: {tests}\n"
-                "Вывод средств: {withdraw}\n"
-                "Кастомный тест: {custom}\n"
-                "KYC: {kyc}\n"
+                "Метод оплаты: {method}\n"
+                "Вариант выплаты: {payout}\n"
                 "Сайт: {site}\n"
                 "Логин: {login}\n"
-                "Метод оплаты: {method}\n"
                 "Комментарий: {comments}\n"
                 "Итого: €{total}\n\n"
                 "Всё верно?"
