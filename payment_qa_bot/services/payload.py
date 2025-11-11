@@ -12,8 +12,18 @@ PKG_PATTERN = re.compile(r"^pkg_(?P<pkg>[a-z0-9]+)_geo_(?P<geo>[A-Za-z]{2})$")
 CALC_PATTERN = re.compile(
     r"^calc_geo(?P<geo>[A-Za-z]{2})_tests(?P<tests>\d+)_opt<(?P<opts>[^>]*)>(?:_sign<(?P<sign>[^>]+)>)?$"
 )
+CALC_V1_PATTERN = re.compile(
+    r"^calc_v1_geo(?P<geo>[A-Za-z]{2})_tests(?P<tests>\d+)_payout(?P<payout>[NWK])"
+    r"(?:_method<(?P<method>[^>]+)>)?"
+    r"(?:_site<(?P<site>[^>]+)>)?"
+    r"(?:_login<(?P<login>[^>]+)>)?"
+    r"(?:_password<(?P<password>[^>]+)>)?"
+    r"(?:_comments<(?P<comments>[^>]+)>)?"
+    r"(?:_price(?P<price>\d+))?"
+    r"(?:_sign<(?P<sign>[^>]+)>)?$"
+)
 
-OPTION_MAP = {
+OPTION_MAP: Dict[str, str] = {
     "w": "withdraw_required",
     "W": "withdraw_required",
     "k": "kyc_required",
@@ -38,6 +48,7 @@ class PayloadData:
     password: Optional[str] = None
     comments: Optional[str] = None
     package_type: Optional[str] = None
+    price_total: Optional[int] = None
 
 
 @dataclass(slots=True)
@@ -59,6 +70,19 @@ def _verify_signature(raw: str, provided: str, secret: bytes) -> None:
         raise SignatureMismatchError("Invalid payload signature")
 
 
+def _decode_segment(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    chunk = value
+    padding = (-len(chunk)) % 4
+    if padding:
+        chunk += "=" * padding
+    try:
+        return base64.urlsafe_b64decode(chunk).decode("utf-8")
+    except Exception:
+        return None
+
+
 def parse_payload(payload: str, secret: Optional[bytes] = None) -> PayloadParseResult:
     payload = payload.strip()
     pkg_match = PKG_PATTERN.match(payload)
@@ -72,11 +96,48 @@ def parse_payload(payload: str, secret: Optional[bytes] = None) -> PayloadParseR
     provided_signature: Optional[str] = None
     if "_sign<" in payload:
         unsigned, _, rest = payload.partition("_sign<")
-        if rest.endswith(">"):
-            provided_signature = rest[:-1]
-        else:
-            provided_signature = rest
+        provided_signature = rest[:-1] if rest.endswith(">") else rest
         raw_for_signature = unsigned
+
+    calc_v1_match = CALC_V1_PATTERN.match(payload)
+    if calc_v1_match:
+        if provided_signature and secret:
+            _verify_signature(raw_for_signature, provided_signature, secret)
+        data = PayloadData(source="site")
+        data.geo = calc_v1_match.group("geo").upper()
+        tests = int(calc_v1_match.group("tests"))
+        if 1 <= tests <= 25:
+            data.tests_count = tests
+        payout_code = calc_v1_match.group("payout")
+        if payout_code == "W":
+            data.withdraw_required = True
+            data.kyc_required = False
+        elif payout_code == "K":
+            data.withdraw_required = True
+            data.kyc_required = True
+        else:
+            data.withdraw_required = False
+            data.kyc_required = False
+        decoded_method = _decode_segment(calc_v1_match.group("method"))
+        if decoded_method:
+            data.payment_method = decoded_method
+        decoded_site = _decode_segment(calc_v1_match.group("site"))
+        if decoded_site:
+            data.site_url = decoded_site
+        decoded_login = _decode_segment(calc_v1_match.group("login"))
+        if decoded_login is not None:
+            data.login = decoded_login
+        decoded_password = _decode_segment(calc_v1_match.group("password"))
+        if decoded_password is not None:
+            data.password = decoded_password
+        decoded_comments = _decode_segment(calc_v1_match.group("comments"))
+        if decoded_comments is not None:
+            data.comments = decoded_comments
+        price_value = calc_v1_match.group("price")
+        if price_value and price_value.isdigit():
+            data.price_total = int(price_value)
+        return PayloadParseResult(ok=True, data=data, error=None)
+
     calc_match = CALC_PATTERN.match(payload)
     if calc_match:
         if provided_signature and secret:
@@ -84,7 +145,7 @@ def parse_payload(payload: str, secret: Optional[bytes] = None) -> PayloadParseR
         data = PayloadData(source="site")
         data.geo = calc_match.group("geo").upper()
         tests = int(calc_match.group("tests"))
-        if 1 <= tests <= 100:
+        if 1 <= tests <= 25:
             data.tests_count = tests
         opts = calc_match.group("opts")
         for char in opts:

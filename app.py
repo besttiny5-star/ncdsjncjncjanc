@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from aiohttp import web
 from aiogram import Bot, Dispatcher
 
+from payment_qa_bot.api.server import create_api_app
 from payment_qa_bot.config import load_config
 from payment_qa_bot.models.db import OrdersRepository
 from payment_qa_bot.routers.admin import get_admin_router
@@ -28,7 +30,15 @@ async def main() -> None:
     encryptor = CredentialEncryptor(config.encryption_key)
     bot = Bot(token=config.bot_token, parse_mode="HTML")
     dp = build_dispatcher(repo, encryptor, config)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    api_app = create_api_app(repo, encryptor)
+    runner = web.AppRunner(api_app)
+    await runner.setup()
+    site = web.TCPSite(runner, host=config.api_host, port=config.api_port)
+    await site.start()
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        await runner.cleanup()
 
 
 if __name__ == "__main__":

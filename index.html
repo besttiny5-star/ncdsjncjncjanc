@@ -146,6 +146,14 @@
       font-size: 16px;
     }
 
+    .hero-actions {
+      margin-top: 32px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+    }
+
     .pricing-card {
       margin-top: 56px;
       padding: 40px clamp(24px, 4vw, 52px);
@@ -298,7 +306,10 @@
     }
 
     select,
-    input[type="number"] {
+    input[type="number"],
+    input[type="text"],
+    input[type="url"],
+    textarea {
       width: 100%;
       padding: 12px 14px;
       border-radius: 14px;
@@ -309,7 +320,10 @@
     }
 
     select:focus,
-    input[type="number"]:focus {
+    input[type="number"]:focus,
+    input[type="text"]:focus,
+    input[type="url"]:focus,
+    textarea:focus {
       outline: 2px solid rgba(124, 58, 237, 0.4);
       border-color: rgba(124, 58, 237, 0.45);
     }
@@ -324,24 +338,24 @@
       -moz-appearance: textfield;
     }
 
-    .addons {
-      display: grid;
-      gap: 12px;
+    textarea {
+      resize: vertical;
+      min-height: 96px;
     }
 
-    .addon-row {
+    .payout-options {
+      display: grid;
+      gap: 10px;
+    }
+
+    .payout-options label {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      border: 1px solid rgba(124, 58, 237, 0.26);
-      background: rgba(124, 58, 237, 0.12);
       font-size: 14px;
     }
 
-    .addon-row input {
-      width: auto;
+    .payout-options input {
       accent-color: var(--accent-strong);
     }
 
@@ -706,6 +720,10 @@
         <h1>Проверяем реальные платежи в сложных GEO</h1>
         <p>Готовим чек-листы, делаем живые транзакции и фиксируем результат на видео. Проверяем карты, локальные кошельки, ваучеры и мобильные методы.</p>
         <p>Работаем с iGaming, подписками, сервисами и финтехом. Все кейсы выполняют локальные операторы на реальных устройствах.</p>
+        <div class="hero-actions">
+          <a class="btn" id="heroStartBtn" href="#">Начать тест</a>
+          <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
+        </div>
       </div>
     </section>
 
@@ -765,25 +783,44 @@
                 </select>
               </div>
               <div class="calc-field">
+                <label for="calcMethod">Метод оплаты</label>
+                <select id="calcMethod"></select>
+              </div>
+              <div class="calc-field">
                 <label for="testsCount">Количество тестов</label>
                 <input id="testsCount" type="number" min="1" value="1" step="1" />
               </div>
               <div class="calc-field">
-                <label>Дополнительные опции</label>
-                <div class="addons">
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="20" data-label="Детальный UX-отчёт"> Детальный UX-отчёт (+€20)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="15" data-label="Срочный SLA 24ч"> Срочный SLA 24ч (+€15)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="85" data-label="Ещё один метод/валюта"> Ещё один метод/валюта (+€85)</label>
-                  <label class="addon-row"><input type="checkbox" class="addon" data-price="45" data-label="KYC на платформе теста"> KYC на платформе теста (+€45)</label>
+                <span>Требуются выплаты?</span>
+                <div class="payout-options">
+                  <label><input type="radio" name="payout" value="N" data-surcharge="0" checked /> Выплата не нужна (0 €)</label>
+                  <label><input type="radio" name="payout" value="W" data-surcharge="10" /> Нужна выплата (+10 €)</label>
+                  <label><input type="radio" name="payout" value="K" data-surcharge="25" /> Полная KYC (+25 €)</label>
                 </div>
+              </div>
+              <div class="calc-field">
+                <label for="calcSite">Сайт или вход</label>
+                <input id="calcSite" type="url" placeholder="https://checkout.example.com" />
+              </div>
+              <div class="calc-field">
+                <label for="calcLogin">Логин для тестеров</label>
+                <input id="calcLogin" type="text" placeholder="Опционально" />
+              </div>
+              <div class="calc-field">
+                <label for="calcPassword">Пароль</label>
+                <input id="calcPassword" type="text" placeholder="Опционально" />
+              </div>
+              <div class="calc-field full">
+                <label for="calcComments">Комментарий</label>
+                <textarea id="calcComments" rows="3" placeholder="Особые сценарии, ограничения, шаги"></textarea>
               </div>
             </div>
             <aside class="calc-summary">
               <div>Итог</div>
               <div id="calcTotal" class="calc-total">€85</div>
               <div id="calcNote" class="calc-note"></div>
-              <a id="calcCta" class="btn" href="#">Начать тест за €85</a>
-              <a class="btn secondary" href="report_sample.pdf" target="_blank" rel="noopener">Скачать пример отчёта (PDF)</a>
+              <a id="calcCta" class="btn" href="#">Отправить в Telegram — €85</a>
+              <a class="btn secondary" href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
             </aside>
           </div>
           <div class="calculator-extra">
@@ -837,8 +874,8 @@
             <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
             <div class="pill">Email: <strong>hello@example.com</strong></div>
             <div class="pill">SLA ответа · 4 часа</div>
-            <a class="btn" href="mailto:hello@example.com?subject=Start%20Payment%20QA">Запросить предложение</a>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Написать в Telegram</a>
+            <a class="btn" id="contactStartBtn" href="#">Начать тест</a>
+            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
           </div>
         </div>
       </div>
@@ -871,71 +908,126 @@
   </footer>
 
   <script>
-    const basePrice = 85;
-    const discountPerBundle = 10;
-    const bundleSize = 5;
+    const BASE_PRICE = 85;
     const currencyFormat = new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
+    const PAYMENT_METHODS = {
+      IN: ['UPI', 'PhonePe', 'PayTM', 'Google Pay', 'Amazon Pay'],
+      BD: ['bKash', 'Nagad', 'Rocket', 'Upay'],
+      PK: ['JazzCash', 'Easypaisa', 'Nayapay'],
+      ID: ['GoPay', 'OVO', 'DANA', 'LinkAja', 'ShopeePay', 'GrabPay', 'Boost', 'QRIS'],
+      MY: ["Touch 'n Go", 'Boost', 'GrabPay', 'ShopeePay', 'DuitNow'],
+      TH: ['PromptPay', 'TrueMoney'],
+      PH: ['GCash', 'PayMaya', 'GrabPay', 'ShopeePay'],
+      EG: ['Vodafone Cash', 'Etisalat Cash', 'Orange Money', 'Fawry', 'Meeza'],
+      KZ: ['Kaspi Pay', 'Bank Transfer'],
+      UZ: ['Payme', 'UzCard', 'Humo'],
+      CI: ['Orange Money', 'MTN Money', 'Moov Money', 'Wave'],
+      AZ: ['Kapital Bank', 'MilliÖdəmə', 'Umico Pay'],
+      AR: ['Mercado Pago', 'Bank Transfer']
+    };
+
+    const PAYOUTS = {
+      N: { label: 'Выплата не нужна (0 €)', surcharge: 0 },
+      W: { label: 'Нужна выплата (+10 €)', surcharge: 10 },
+      K: { label: 'Полная KYC (+25 €)', surcharge: 25 }
+    };
+
     const countrySelect = document.getElementById('calcCountry');
+    const methodSelect = document.getElementById('calcMethod');
     const testsInput = document.getElementById('testsCount');
-    const addons = Array.from(document.querySelectorAll('.addon'));
+    const payoutInputs = Array.from(document.querySelectorAll('input[name="payout"]'));
+    const siteInput = document.getElementById('calcSite');
+    const loginInput = document.getElementById('calcLogin');
+    const passwordInput = document.getElementById('calcPassword');
+    const commentsInput = document.getElementById('calcComments');
     const totalEl = document.getElementById('calcTotal');
     const noteEl = document.getElementById('calcNote');
     const ctaEl = document.getElementById('calcCta');
 
-    function calculateTotal() {
-      const rawValue = testsInput.value.trim();
-      const parsedValue = parseInt(rawValue, 10);
-      const count = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
-
-      if (rawValue === '') {
-        // Allow пользователю временно очистить поле ввода, не подставляя значение обратно
-      } else if (String(count) !== rawValue) {
-        testsInput.value = String(count);
-      }
-
-      const baseTotal = basePrice * count;
-      const discount = Math.floor(count / bundleSize) * discountPerBundle;
-      const addonsTotal = addons.filter(a => a.checked).reduce((sum, addon) => sum + Number(addon.dataset.price), 0);
-      const total = baseTotal - discount + addonsTotal;
-
-      const formatted = currencyFormat.format(total);
-      totalEl.textContent = formatted;
-
-      if (discount > 0 || addonsTotal > 0) {
-        const discountText = discount > 0 ? `Скидка: −${currencyFormat.format(discount)}` : null;
-        const addonsText = addonsTotal > 0 ? `Опции: +${currencyFormat.format(addonsTotal)}` : null;
-        noteEl.textContent = [discountText, addonsText].filter(Boolean).join(' · ');
-      } else {
-        noteEl.textContent = '';
-      }
-
-      const selectedAddons = addons.filter(a => a.checked);
-      const addonCount = selectedAddons.length;
-      const geoValue = countrySelect ? countrySelect.value : 'IN';
-
-      if (ctaEl) {
-        const payloadParts = [
-          'calc',
-          `geo${geoValue}`,
-          `tests${count}`,
-          addonCount ? `opt${addonCount}` : 'opt0',
-          `total${Math.round(total)}`
-        ];
-
-        ctaEl.textContent = `Начать тест за ${formatted}`;
-        ctaEl.dataset.startPayload = payloadParts.join('_');
-        ctaEl.dataset.geo = geoValue;
-        ctaEl.dataset.tests = String(count);
-        ctaEl.dataset.total = String(Math.round(total));
-        ctaEl.dataset.addons = String(addonCount);
+    function populateMethods(geo) {
+      const methods = PAYMENT_METHODS[geo] || [];
+      methodSelect.innerHTML = '';
+      methods.forEach((method) => {
+        const option = document.createElement('option');
+        option.value = method;
+        option.textContent = method;
+        methodSelect.appendChild(option);
+      });
+      if (!methodSelect.value && methods.length) {
+        methodSelect.value = methods[0];
       }
     }
 
-    countrySelect.addEventListener('change', calculateTotal);
-    testsInput.addEventListener('input', calculateTotal);
-    addons.forEach(addon => addon.addEventListener('change', calculateTotal));
+    function encodeSegment(value) {
+      if (!value) return '';
+      return btoa(unescape(encodeURIComponent(value))).replace(/=+$/g, '');
+    }
 
+    function buildPayload({ geo, tests, payoutCode, method, site, login, password, comments, total }) {
+      let payload = `calc_v1_geo${geo}_tests${tests}_payout${payoutCode}`;
+      if (method) payload += `_method<${encodeSegment(method)}>`;
+      if (site) payload += `_site<${encodeSegment(site)}>`;
+      if (login) payload += `_login<${encodeSegment(login)}>`;
+      if (password) payload += `_password<${encodeSegment(password)}>`;
+      if (comments) payload += `_comments<${encodeSegment(comments)}>`;
+      payload += `_price${total}`;
+      return payload;
+    }
+
+    function calculateTotal() {
+      const rawValue = testsInput.value.trim();
+      const parsedValue = parseInt(rawValue, 10);
+      const tests = Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 1;
+      if (String(tests) !== rawValue) {
+        testsInput.value = String(tests);
+      }
+
+      const payoutRadio = payoutInputs.find((input) => input.checked) || payoutInputs[0];
+      if (!payoutRadio) {
+        return;
+      }
+      const payout = PAYOUTS[payoutRadio.value] || PAYOUTS.N;
+      const geo = countrySelect.value;
+      const method = methodSelect.value || '';
+      const total = tests * BASE_PRICE + payout.surcharge;
+      const formatted = currencyFormat.format(total);
+      totalEl.textContent = formatted;
+      noteEl.textContent = [method, `${tests} тест(ов)`, payout.label].filter(Boolean).join(' · ');
+
+      if (ctaEl) {
+        ctaEl.textContent = `Отправить в Telegram — ${formatted}`;
+        const payload = buildPayload({
+          geo,
+          tests,
+          payoutCode: payoutRadio.value,
+          method,
+          site: siteInput.value.trim(),
+          login: loginInput.value.trim(),
+          password: passwordInput.value.trim(),
+          comments: commentsInput.value.trim(),
+          total: Math.round(total)
+        });
+        ctaEl.dataset.payload = payload;
+        ctaEl.dataset.geo = geo;
+        ctaEl.dataset.tests = String(tests);
+        ctaEl.dataset.total = String(Math.round(total));
+      }
+    }
+
+    countrySelect.addEventListener('change', () => {
+      populateMethods(countrySelect.value);
+      calculateTotal();
+    });
+    methodSelect.addEventListener('change', calculateTotal);
+    testsInput.addEventListener('input', calculateTotal);
+    payoutInputs.forEach((input) => input.addEventListener('change', calculateTotal));
+    siteInput.addEventListener('input', calculateTotal);
+    loginInput.addEventListener('input', calculateTotal);
+    passwordInput.addEventListener('input', calculateTotal);
+    commentsInput.addEventListener('input', calculateTotal);
+
+    populateMethods(countrySelect.value);
     calculateTotal();
 
     const modules = {
@@ -1029,7 +1121,7 @@
 
     const updateTelegramLinks = () => {
       document.querySelectorAll('[data-telegram-link]').forEach(link => {
-        link.href = `https://t.me/${BOT_USERNAME}`;
+        link.href = `https://t.me/${BOT_USERNAME}?start=start`;
       });
 
       document.querySelectorAll('.telegram-handle').forEach(el => {
@@ -1059,13 +1151,28 @@
     if (calculatorBtn) {
       calculatorBtn.addEventListener('click', (e) => {
         e.preventDefault();
-
-        const defaultGeo = geoSelect ? geoSelect.value : 'IN';
-        const payload = calculatorBtn.dataset.startPayload || `calc_geo${defaultGeo}_tests1`;
-
+        if (!calculatorBtn.dataset.payload && typeof calculateTotal === 'function') {
+          calculateTotal();
+        }
+        const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
+        const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
         openTelegram(payload);
       });
     }
+
+    [document.getElementById('heroStartBtn'), document.getElementById('contactStartBtn')]
+      .filter(Boolean)
+      .forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          if (calculatorBtn && typeof calculateTotal === 'function') {
+            calculateTotal();
+            const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
+            const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
+            openTelegram(payload);
+          }
+        });
+      });
   </script>
 </body>
 </html>

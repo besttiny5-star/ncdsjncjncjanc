@@ -18,12 +18,22 @@ let activity = [];
 let countries = {};
 let testers = [];
 
-function initOrderPage() {
-  if (!window.PaymentQA_DATA) {
+async function initOrderPage() {
+  let dataset = window.PaymentQA_DATA;
+  if (!dataset && window.PaymentQA_DATA_PROMISE) {
+    try {
+      dataset = await window.PaymentQA_DATA_PROMISE;
+      window.PaymentQA_DATA = dataset;
+    } catch (error) {
+      console.error('Нет данных PaymentQA_DATA', error);
+      return;
+    }
+  }
+  if (!dataset) {
     console.error('Нет данных PaymentQA_DATA');
     return;
   }
-  orders = window.PaymentQA_DATA.orders
+  orders = dataset.orders
     .map((order) => ({
       ...order,
       createdAt: new Date(order.createdAt),
@@ -32,9 +42,9 @@ function initOrderPage() {
       completedAt: order.completedAt ? new Date(order.completedAt) : null
     }))
     .sort((a, b) => a.createdAt - b.createdAt);
-  testers = window.PaymentQA_DATA.testers;
-  countries = window.PaymentQA_DATA.countries;
-  activity = window.PaymentQA_DATA.activity.map((item) => ({ ...item, createdAt: new Date(item.createdAt) }));
+  testers = dataset.testers;
+  countries = dataset.countries;
+  activity = dataset.activity.map((item) => ({ ...item, createdAt: new Date(item.createdAt) }));
 
   const params = new URLSearchParams(window.location.search);
   let orderNumber = params.get('order');

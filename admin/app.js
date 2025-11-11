@@ -79,24 +79,35 @@ const CHART_COLORS = {
 
 const PACKAGE_COLORS = ['#d8b4fe', '#c084fc', '#a855f7'];
 
-function init() {
-  if (!window.PaymentQA_DATA) {
+async function init() {
+  let dataset = window.PaymentQA_DATA;
+  if (!dataset && window.PaymentQA_DATA_PROMISE) {
+    try {
+      dataset = await window.PaymentQA_DATA_PROMISE;
+      window.PaymentQA_DATA = dataset;
+    } catch (error) {
+      console.error('Не удалось загрузить данные PaymentQA_DATA', error);
+      return;
+    }
+  }
+
+  if (!dataset) {
     console.error('Не найдены данные PaymentQA_DATA');
     return;
   }
 
-  state.orders = window.PaymentQA_DATA.orders.map((order) => ({
+  state.orders = dataset.orders.map((order) => ({
     ...order,
     createdAt: new Date(order.createdAt),
     paidAt: order.paidAt ? new Date(order.paidAt) : null,
     startedAt: order.startedAt ? new Date(order.startedAt) : null,
     completedAt: order.completedAt ? new Date(order.completedAt) : null
   }));
-  state.testers = window.PaymentQA_DATA.testers;
-  state.activity = window.PaymentQA_DATA.activity
+  state.testers = dataset.testers;
+  state.activity = dataset.activity
     .map((item) => ({ ...item, createdAt: new Date(item.createdAt) }))
     .sort((a, b) => b.createdAt - a.createdAt);
-  state.countries = window.PaymentQA_DATA.countries;
+  state.countries = dataset.countries;
 
   hydrateFilters();
   hydratePageSize();

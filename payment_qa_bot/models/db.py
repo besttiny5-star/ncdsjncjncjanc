@@ -26,6 +26,7 @@ class OrderRecord:
     site_url: Optional[str]
     login: Optional[str]
     password_enc: Optional[str]
+    payout_surcharge: Optional[int]
     price_eur: Optional[int]
     status: str
     payment_network: Optional[str]
@@ -33,6 +34,7 @@ class OrderRecord:
     payment_txid: Optional[str]
     payment_proof_file_id: Optional[str]
     admin_notes: Optional[str]
+    payload_hash: Optional[str]
     created_at: str
     updated_at: str
 
@@ -53,10 +55,12 @@ class OrderCreate:
     site_url: Optional[str]
     login: Optional[str]
     password_enc: Optional[str]
+    payout_surcharge: int
     price_eur: int
     status: str
     payment_network: str
     payment_wallet: str
+    payload_hash: Optional[str]
 
 
 @dataclass(slots=True)
@@ -92,6 +96,7 @@ class OrdersRepository:
                     site_url TEXT,
                     login TEXT,
                     password_enc TEXT,
+                    payout_surcharge INTEGER,
                     price_eur INTEGER,
                     status TEXT NOT NULL,
                     payment_network TEXT,
@@ -99,6 +104,7 @@ class OrdersRepository:
                     payment_txid TEXT,
                     payment_proof_file_id TEXT,
                     admin_notes TEXT,
+                    payload_hash TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -114,7 +120,19 @@ class OrdersRepository:
             )
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+            await self._ensure_columns(db)
             await db.commit()
+
+    async def _ensure_columns(self, db: aiosqlite.Connection) -> None:
+        cursor = await db.execute("PRAGMA table_info(orders)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        alter_statements = []
+        if "payout_surcharge" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN payout_surcharge INTEGER DEFAULT 0")
+        if "payload_hash" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN payload_hash TEXT")
+        for statement in alter_statements:
+            await db.execute(statement)
 
     async def create_order(self, payload: OrderCreate) -> int:
         now = datetime.utcnow().isoformat(timespec="seconds")
@@ -186,6 +204,16 @@ class OrdersRepository:
             rows = await cursor.fetchall()
         return [self._row_to_order(row) for row in rows]
 
+    async def list_recent(self, limit: int = 200) -> List[OrderRecord]:
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM orders ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+        return [self._row_to_order(row) for row in rows]
+
     async def get_stats(self) -> Dict[str, int]:
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
@@ -194,6 +222,18 @@ class OrdersRepository:
             )
             rows = await cursor.fetchall()
         return {row["status"]: row["cnt"] for row in rows}
+
+    async def find_by_payload_hash(self, user_id: int, payload_hash: str) -> Optional[OrderRecord]:
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM orders WHERE user_id = ? AND payload_hash = ? ORDER BY created_at DESC LIMIT 1",
+                (user_id, payload_hash),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_order(row)
 
     async def set_language(self, user_id: int, language: str) -> None:
         async with aiosqlite.connect(self._db_path) as db:
@@ -233,6 +273,7 @@ class OrdersRepository:
             site_url=row["site_url"],
             login=row["login"],
             password_enc=row["password_enc"],
+            payout_surcharge=row["payout_surcharge"],
             price_eur=row["price_eur"],
             status=row["status"],
             payment_network=row["payment_network"],
@@ -240,6 +281,7 @@ class OrdersRepository:
             payment_txid=row["payment_txid"],
             payment_proof_file_id=row["payment_proof_file_id"],
             admin_notes=row["admin_notes"],
+            payload_hash=row["payload_hash"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

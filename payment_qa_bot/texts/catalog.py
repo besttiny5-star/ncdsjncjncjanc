@@ -26,6 +26,7 @@ TEXTS = TextCatalog(
             "start.tg": "Welcome! Let's create a new payment QA order. We'll guide you through the steps.",
             "wizard.geo": "🌍 Step 1/6 — Select GEO\n\nChoose the country for testing:",
             "wizard.method": "💳 Step 2/6 — Payment method\n\nSelect the payment method to be tested from the list below.",
+            "wizard.tests": "📦 Step 3/6 — Number of test runs\n\nSend a number from 1 to 25. Base price per test: €{base}.",
             "wizard.payout": "💼 Step 3/6 — Payout requirements\n\nPlease select payout option:",
             "wizard.invalid.payout": "Please choose one of the payout options.",
             "payout.option.none": "No payout needed (0 €)",
@@ -43,7 +44,7 @@ TEXTS = TextCatalog(
             "wizard.missing.custom_text": "Please describe the custom test scenario to continue.",
             "wizard.invalid.geo": "Please choose one of the suggested GEO buttons.",
             "wizard.invalid.method": "Please choose one of the available payment methods.",
-            "wizard.invalid.tests": "The number of tests must be an integer from 1 to 100.",
+            "wizard.invalid.tests": "Please send an integer from 1 to 25.",
             "wizard.invalid.url": "The URL must start with http:// or https://.",
             "wizard.invalid.comment": "Comments should not exceed 1000 characters.",
             "wizard.invalid.login": "Login must be between 2 and 120 characters.",
@@ -52,6 +53,7 @@ TEXTS = TextCatalog(
             "confirmation.body": (
                 "<b>Summary</b>\n"
                 "GEO: {geo}\n"
+                "Tests: {tests}\n"
                 "Payment method: {method}\n"
                 "Payout option: {payout}\n"
                 "Website: {site}\n"
@@ -79,6 +81,8 @@ TEXTS = TextCatalog(
             "payment.txid.saved": "Payment details received. We'll notify admins for review.",
             "status.none": "You don't have any orders yet.",
             "status.last": "Last order #{order_id}: status — {status}, total — €{total}.",
+            "order.accepted": "✅ Order #{order_id} saved. Total amount: €{total}.",
+            "order.duplicate": "We already have order #{order_id} with the same parameters. Total: €{total}.",
             "help.text": "Commands:\n/start — restart the wizard\n/status — last order status\n/cancel — cancel current flow\n/lang — switch language",
             "lang.updated": "Language switched to English.",
             "lang.prompt": "Send /lang to switch language anytime.",
@@ -87,12 +91,15 @@ TEXTS = TextCatalog(
             "admin.stats.header": "Admin dashboard",
             "admin.stats.line": "{status}: {count}",
             "admin.no.orders": "No orders found.",
+            "group.restriction": "Please message the bot directly to place an order.",
+            "group.button": "Open bot",
         },
         "ru": {
             "start.site.invalid": "Не удалось распознать параметры заявки. Откройте ссылку с сайта ещё раз или используйте /start без параметров.",
             "start.tg": "Привет! Давайте оформим заявку на QA платежей. Я помогу пройти все шаги.",
             "wizard.geo": "🌍 Шаг 1/6 — Выбор GEO\n\nВыберите страну для тестирования:",
             "wizard.method": "💳 Шаг 2/6 — Метод оплаты\n\nВыберите способ оплаты для теста из списка ниже.",
+            "wizard.tests": "📦 Шаг 3/6 — Количество прогонов\n\nОтправьте число от 1 до 25. Базовая цена за тест: €{base}.",
             "wizard.payout": "💼 Шаг 3/6 — Требования к выплатам\n\nВыберите нужный вариант:",
             "wizard.invalid.payout": "Пожалуйста, выберите один из вариантов выплаты.",
             "payout.option.none": "Выплата не нужна (0 €)",
@@ -110,7 +117,7 @@ TEXTS = TextCatalog(
             "wizard.missing.custom_text": "Нужно описать сценарий, чтобы продолжить.",
             "wizard.invalid.geo": "Пожалуйста, выберите одну из предложенных стран.",
             "wizard.invalid.method": "Пожалуйста, выберите один из доступных способов оплаты.",
-            "wizard.invalid.tests": "Количество тестов должно быть целым числом от 1 до 100.",
+            "wizard.invalid.tests": "Количество тестов должно быть целым числом от 1 до 25.",
             "wizard.invalid.url": "Ссылка должна начинаться с http:// или https://.",
             "wizard.invalid.comment": "Комментарий не должен превышать 1000 символов.",
             "wizard.invalid.login": "Логин должен содержать от 2 до 120 символов.",
@@ -119,6 +126,7 @@ TEXTS = TextCatalog(
             "confirmation.body": (
                 "<b>Проверьте детали</b>\n"
                 "GEO: {geo}\n"
+                "Тесты: {tests}\n"
                 "Метод оплаты: {method}\n"
                 "Вариант выплаты: {payout}\n"
                 "Сайт: {site}\n"
@@ -146,6 +154,8 @@ TEXTS = TextCatalog(
             "payment.txid.saved": "Детали оплаты получены. Сообщим администраторам.",
             "status.none": "У вас ещё нет заказов.",
             "status.last": "Последний заказ #{order_id}: статус — {status}, сумма — €{total}.",
+            "order.accepted": "✅ Заявка #{order_id} принята. Сумма к оплате: €{total}.",
+            "order.duplicate": "У нас уже есть заявка #{order_id} с этими параметрами. Сумма: €{total}.",
             "help.text": "Команды:\n/start — начать заново\n/status — статус последнего заказа\n/cancel — отменить текущий шаг\n/lang — сменить язык",
             "lang.updated": "Язык переключен на русский.",
             "lang.prompt": "Отправьте /lang, чтобы сменить язык в любой момент.",
@@ -154,6 +164,8 @@ TEXTS = TextCatalog(
             "admin.stats.header": "Админ-панель",
             "admin.stats.line": "{status}: {count}",
             "admin.no.orders": "Заказов нет.",
+            "group.restriction": "Пожалуйста, напишите боту в личные сообщения, чтобы оформить заказ.",
+            "group.button": "Открыть бота",
         },
     }
 )
