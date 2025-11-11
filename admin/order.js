@@ -9,8 +9,7 @@ const ORDER_STATUS_BADGES = {
 const PACKAGE_LABELS = {
   single: 'Single Test',
   mini: 'Mini Audit',
-  retainer: 'Retainer',
-  custom: 'Custom'
+  retainer: 'Retainer'
 };
 
 let orders = [];
@@ -19,27 +18,23 @@ let activity = [];
 let countries = {};
 let testers = [];
 
-async function initOrderPage() {
-  try {
-    if (!window.PaymentQA_DATA) {
-      window.PaymentQA_DATA = await window.PaymentQA.loadData();
-    }
-  } catch (error) {
-    console.error('Не удалось загрузить данные заказа', error);
+function initOrderPage() {
+  if (!window.PaymentQA_DATA) {
+    console.error('Нет данных PaymentQA_DATA');
     return;
   }
-  orders = (window.PaymentQA_DATA.orders || [])
+  orders = window.PaymentQA_DATA.orders
     .map((order) => ({
       ...order,
-      createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
+      createdAt: new Date(order.createdAt),
       paidAt: order.paidAt ? new Date(order.paidAt) : null,
       startedAt: order.startedAt ? new Date(order.startedAt) : null,
       completedAt: order.completedAt ? new Date(order.completedAt) : null
     }))
     .sort((a, b) => a.createdAt - b.createdAt);
-  testers = window.PaymentQA_DATA.testers || [];
-  countries = window.PaymentQA_DATA.countries || {};
-  activity = (window.PaymentQA_DATA.activity || []).map((item) => ({ ...item, createdAt: item.createdAt ? new Date(item.createdAt) : new Date() }));
+  testers = window.PaymentQA_DATA.testers;
+  countries = window.PaymentQA_DATA.countries;
+  activity = window.PaymentQA_DATA.activity.map((item) => ({ ...item, createdAt: new Date(item.createdAt) }));
 
   const params = new URLSearchParams(window.location.search);
   let orderNumber = params.get('order');
@@ -69,23 +64,9 @@ async function initOrderPage() {
   document.getElementById('change-status').addEventListener('click', () => {
     document.getElementById('status-dialog').showModal();
   });
-  document.getElementById('status-save').addEventListener('click', async () => {
+  document.getElementById('status-save').addEventListener('click', () => {
     document.getElementById('status-dialog').close();
-    const order = orders[orderIndex];
-    if (!order) return;
-    const newStatus = document.getElementById('status-select').value;
-    const note = document.getElementById('status-note').value.trim();
-    if (newStatus && ORDER_STATUS_BADGES[newStatus]) {
-      order.status = newStatus;
-      try {
-        await window.PaymentQA.updateOrderStatus(order.id, { status: newStatus, adminNotes: note || undefined });
-        showToast('✅', 'Статус обновлён');
-        renderOrder();
-      } catch (error) {
-        console.error('Не удалось обновить статус', error);
-        showToast('⚠️', 'Не удалось обновить статус');
-      }
-    }
+    showToast('✅', 'Статус обновлён (демо)');
   });
   document.querySelectorAll('[data-close]').forEach((btn) => btn.addEventListener('click', () => btn.closest('dialog').close()));
 

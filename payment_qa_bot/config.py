@@ -36,8 +36,6 @@ class Config:
     encryption_key: Optional[bytes]
     default_language: str
     geo_whitelist: List[str]
-    api_host: str
-    api_port: int
 
 
 def load_config() -> Config:
@@ -69,12 +67,6 @@ def load_config() -> Config:
         )
     )
 
-    api_host = os.getenv("API_HOST", "0.0.0.0")
-    try:
-        api_port = int(os.getenv("API_PORT", "8080"))
-    except ValueError:
-        api_port = 8080
-
     return Config(
         bot_token=token,
         db_path=db_path,
@@ -85,6 +77,4 @@ def load_config() -> Config:
         encryption_key=encryption_key,
         default_language=default_lang,
         geo_whitelist=geo_whitelist,
-        api_host=api_host,
-        api_port=api_port,
     )
