@@ -4,7 +4,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional
 
 import aiosqlite
 
@@ -33,7 +33,6 @@ class OrderRecord:
     payment_txid: Optional[str]
     payment_proof_file_id: Optional[str]
     admin_notes: Optional[str]
-    payload_hash: Optional[str]
     created_at: str
     updated_at: str
 
@@ -58,20 +57,12 @@ class OrderCreate:
     status: str
     payment_network: str
     payment_wallet: str
-    payload_hash: Optional[str] = None
 
 
 @dataclass(slots=True)
 class UserSettings:
     user_id: int
     language: str
-
-
-@dataclass(slots=True)
-class OrderCreateResult:
-    order_id: int
-    created: bool
-    status: Optional[str] = None
 
 
 class OrdersRepository:
@@ -108,7 +99,6 @@ class OrdersRepository:
                     payment_txid TEXT,
                     payment_proof_file_id TEXT,
                     admin_notes TEXT,
-                    payload_hash TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -124,14 +114,9 @@ class OrdersRepository:
             )
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute("PRAGMA table_info(orders)")
-            columns = {row["name"] for row in await cursor.fetchall()}
-            if "payload_hash" not in columns:
-                await db.execute("ALTER TABLE orders ADD COLUMN payload_hash TEXT")
             await db.commit()
 
-    async def create_order(self, payload: OrderCreate) -> OrderCreateResult:
+    async def create_order(self, payload: OrderCreate) -> int:
         now = datetime.utcnow().isoformat(timespec="seconds")
         fields: Dict[str, Any] = asdict(payload)
         fields["withdraw_required"] = int(payload.withdraw_required)
@@ -139,36 +124,16 @@ class OrdersRepository:
         fields["kyc_required"] = int(payload.kyc_required)
         fields["created_at"] = now
         fields["updated_at"] = now
+        columns = ", ".join(fields.keys())
+        placeholders = ", ".join(["?"] * len(fields))
+        values = list(fields.values())
         async with aiosqlite.connect(self._db_path) as db:
-            if fields.get("payload_hash"):
-                db.row_factory = aiosqlite.Row
-                cursor = await db.execute(
-                    """
-                    SELECT order_id, status
-                    FROM orders
-                    WHERE user_id = ? AND payload_hash = ?
-                    ORDER BY order_id DESC
-                    LIMIT 1
-                    """,
-                    (payload.user_id, fields["payload_hash"]),
-                )
-                existing = await cursor.fetchone()
-                if existing:
-                    return OrderCreateResult(
-                        order_id=existing["order_id"],
-                        created=False,
-                        status=existing["status"],
-                    )
-
-            columns = ", ".join(fields.keys())
-            placeholders = ", ".join(["?"] * len(fields))
-            values = list(fields.values())
             cursor = await db.execute(
                 f"INSERT INTO orders ({columns}) VALUES ({placeholders})",
                 values,
             )
             await db.commit()
-            return OrderCreateResult(order_id=cursor.lastrowid, created=True, status=payload.status)
+            return cursor.lastrowid
 
     async def update_order(self, order_id: int, **fields: Any) -> None:
         if not fields:
@@ -210,18 +175,6 @@ class OrdersRepository:
         if row is None:
             return None
         return self._row_to_order(row)
-
-    async def list_orders(self, limit: Optional[int] = None) -> List[OrderRecord]:
-        query = "SELECT * FROM orders ORDER BY created_at DESC"
-        params: Sequence[Any] = ()
-        if limit is not None:
-            query += " LIMIT ?"
-            params = (limit,)
-        async with aiosqlite.connect(self._db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(query, params)
-            rows = await cursor.fetchall()
-        return [self._row_to_order(row) for row in rows]
 
     async def list_by_status(self, status: str) -> List[OrderRecord]:
         async with aiosqlite.connect(self._db_path) as db:
@@ -287,7 +240,6 @@ class OrdersRepository:
             payment_txid=row["payment_txid"],
             payment_proof_file_id=row["payment_proof_file_id"],
             admin_notes=row["admin_notes"],
-            payload_hash=row["payload_hash"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

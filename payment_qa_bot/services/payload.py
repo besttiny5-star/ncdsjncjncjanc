@@ -3,10 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import base64
-import json
-import hmac
-import hashlib
 import re
 from dataclasses import dataclass
 from typing import Dict, Optional
@@ -15,9 +11,6 @@ from typing import Dict, Optional
 PKG_PATTERN = re.compile(r"^pkg_(?P<pkg>[a-z0-9]+)_geo_(?P<geo>[A-Za-z]{2})$")
 CALC_PATTERN = re.compile(
     r"^calc_geo(?P<geo>[A-Za-z]{2})_tests(?P<tests>\d+)_opt<(?P<opts>[^>]*)>(?:_sign<(?P<sign>[^>]+)>)?$"
-)
-CALC_V2_PATTERN = re.compile(
-    r"^calc2_(?P<payload>[A-Za-z0-9_=\-]+)(?:_sign<(?P<sign>[^>]+)>)?$"
 )
 
 OPTION_MAP = {
@@ -45,7 +38,6 @@ class PayloadData:
     password: Optional[str] = None
     comments: Optional[str] = None
     package_type: Optional[str] = None
-    price_eur: Optional[int] = None
 
 
 @dataclass(slots=True)
@@ -99,49 +91,6 @@ def parse_payload(payload: str, secret: Optional[bytes] = None) -> PayloadParseR
             key = OPTION_MAP.get(char)
             if key:
                 setattr(data, key, True)
-        return PayloadParseResult(ok=True, data=data, error=None)
-
-    calc_v2 = CALC_V2_PATTERN.match(payload)
-    if calc_v2:
-        encoded = calc_v2.group("payload")
-        if provided_signature and secret:
-            _verify_signature(raw_for_signature, provided_signature, secret)
-        try:
-            padding = "=" * (-len(encoded) % 4)
-            decoded = base64.urlsafe_b64decode(encoded + padding)
-            obj = json.loads(decoded.decode("utf-8"))
-        except (ValueError, json.JSONDecodeError):
-            return PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="invalid_payload")
-        data = PayloadData(source="site")
-        if isinstance(obj, dict):
-            geo = obj.get("geo")
-            if isinstance(geo, str) and len(geo) == 2:
-                data.geo = geo.upper()
-            tests = obj.get("tests")
-            if isinstance(tests, int) and 1 <= tests <= 100:
-                data.tests_count = tests
-            if obj.get("withdraw_required") is True:
-                data.withdraw_required = True
-            if obj.get("kyc_required") is True:
-                data.kyc_required = True
-            method = obj.get("payment_method")
-            if isinstance(method, str) and 1 <= len(method) <= 120:
-                data.payment_method = method
-            site_url = obj.get("site_url")
-            if isinstance(site_url, str) and site_url:
-                data.site_url = site_url
-            login = obj.get("login")
-            if isinstance(login, str):
-                data.login = login
-            password = obj.get("password")
-            if isinstance(password, str):
-                data.password = password
-            comments = obj.get("comments")
-            if isinstance(comments, str):
-                data.comments = comments
-            price = obj.get("price_eur")
-            if isinstance(price, int) and price >= 0:
-                data.price_eur = price
         return PayloadParseResult(ok=True, data=data, error=None)
 
     return PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="unsupported_payload")
