@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, List, Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove
 
 from payment_qa_bot.config import Config
 from payment_qa_bot.keyboards.common import (
@@ -17,6 +18,7 @@ from payment_qa_bot.keyboards.common import (
 )
 from payment_qa_bot.keyboards.geo import geo_keyboard
 from payment_qa_bot.keyboards.options import methods_keyboard, payout_keyboard
+from payment_qa_bot.keyboards.tests import tests_keyboard
 from payment_qa_bot.models.db import OrderCreate, OrdersRepository
 from payment_qa_bot.services.geo import format_country
 from payment_qa_bot.services.payment_methods import get_methods_for_geo
@@ -30,6 +32,7 @@ from payment_qa_bot.texts.catalog import TEXTS
 STATE_FLOW = [
     OrderStates.GEO,
     OrderStates.METHOD,
+    OrderStates.TESTS,
     OrderStates.PAYOUT,
     OrderStates.COMMENTS,
     OrderStates.SITE_URL,
@@ -119,6 +122,7 @@ def get_public_router(
         checks = [
             (OrderStates.GEO, lambda d: bool(d.get("geo"))),
             (OrderStates.METHOD, lambda d: bool(d.get("payment_method"))),
+            (OrderStates.TESTS, lambda d: int(d.get("tests_count") or 0) >= 1),
             (OrderStates.PAYOUT, lambda d: bool(d.get("payout_option"))),
             (OrderStates.COMMENTS, lambda d: "comments" in d),
             (OrderStates.SITE_URL, lambda d: "site_url" in d),
@@ -145,6 +149,11 @@ def get_public_router(
             methods = get_methods_for_geo(draft.get("geo"))
             keyboard = methods_keyboard(methods, language)
             await message.answer(prompt, reply_markup=keyboard)
+        elif target == OrderStates.TESTS:
+            await message.answer(
+                TEXTS.get("wizard.tests", language, base=calculate_price(1, 0).base_total),
+                reply_markup=tests_keyboard(language),
+            )
         elif target == OrderStates.PAYOUT:
             options = [TEXTS.button(option["key"], language) for option in PAYOUT_OPTIONS]
             await message.answer(
@@ -182,6 +191,7 @@ def get_public_router(
             "confirmation.body",
             language,
             geo=format_country(draft.get("geo", "—")),
+            tests=tests,
             method=draft.get("payment_method") or "—",
             payout=payout_text,
             site=draft.get("site_url") or "—",
@@ -244,6 +254,34 @@ def get_public_router(
                 return code
         return None
 
+    def compute_payload_hash(raw: str) -> str:
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    async def build_private_button(bot) -> InlineKeyboardMarkup:
+        me = await bot.get_me()
+        username = me.username or ""
+        url = f"https://t.me/{username}?start=start" if username else "https://t.me/"
+        text = TEXTS.get("group.button", config.default_language)
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, url=url)]])
+
+    @router.my_chat_member()
+    async def on_added_to_group(event: ChatMemberUpdated) -> None:
+        if event.chat.type == "private":
+            return
+        if not (event.new_chat_member.is_member() or event.new_chat_member.is_administrator()):
+            return
+        keyboard = await build_private_button(event.bot)
+        await event.bot.send_message(
+            event.chat.id,
+            TEXTS.get("group.restriction", config.default_language),
+            reply_markup=keyboard,
+        )
+
+    @router.message(~F.chat.type == "private")
+    async def ignore_groups(message: Message) -> None:
+        keyboard = await build_private_button(message.bot)
+        await message.answer(TEXTS.get("group.restriction", config.default_language), reply_markup=keyboard)
+
     @router.message(CommandStart())
     async def start(message: Message, state: FSMContext, command: CommandObject) -> None:
         await state.clear()
@@ -256,13 +294,16 @@ def get_public_router(
                 parsed = PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="invalid_signature")
             if parsed.ok:
                 await set_mode(state, "site")
-                draft = {"source": "site"}
+                payload_hash = compute_payload_hash(payload_value)
+                draft: Dict[str, Any] = {"source": "site", "payload_hash": payload_hash}
                 if parsed.data.geo:
                     draft["geo"] = parsed.data.geo
                 if parsed.data.tests_count is not None and parsed.data.tests_count >= 1:
                     draft["tests_count"] = parsed.data.tests_count
                 if parsed.data.payment_method:
                     draft["payment_method"] = parsed.data.payment_method
+                if parsed.data.price_total is not None:
+                    draft["price_eur"] = parsed.data.price_total
                 if parsed.data.site_url:
                     draft["site_url"] = parsed.data.site_url
                 if parsed.data.login is not None:
@@ -292,7 +333,9 @@ def get_public_router(
                     draft["kyc_required"] = False
                 if "payout_surcharge" not in draft:
                     draft["payout_surcharge"] = 0
-                await state.update_data(draft=draft, lang=lang)
+                tests = int(draft.get("tests_count") or 1)
+                surcharge = int(draft.get("payout_surcharge") or 0)
+                await state.update_data(draft=draft, lang=lang, price_eur=calculate_price(tests, surcharge).total)
                 missing = find_next_missing(draft)
                 if missing is None:
                     await show_confirmation(message, state, lang)
@@ -302,13 +345,31 @@ def get_public_router(
                 return
             await message.answer(TEXTS.get("start.site.invalid", lang), reply_markup=ReplyKeyboardRemove())
             await set_mode(state, "wizard")
-            await state.update_data(draft={"source": "tg", "tests_count": 1, "withdraw_required": False, "kyc_required": False, "payout_surcharge": 0})
+            await state.update_data(
+                draft={
+                    "source": "tg",
+                    "tests_count": 1,
+                    "withdraw_required": False,
+                    "kyc_required": False,
+                    "payout_surcharge": 0,
+                },
+                price_eur=calculate_price(1, 0).total,
+            )
             await state.set_state(OrderStates.GEO)
             await ask_state(message, state, OrderStates.GEO, lang)
             return
 
         await set_mode(state, "wizard")
-        await state.update_data(draft={"source": "tg", "tests_count": 1, "withdraw_required": False, "kyc_required": False, "payout_surcharge": 0})
+        await state.update_data(
+            draft={
+                "source": "tg",
+                "tests_count": 1,
+                "withdraw_required": False,
+                "kyc_required": False,
+                "payout_surcharge": 0,
+            },
+            price_eur=calculate_price(1, 0).total,
+        )
         await message.answer(TEXTS.get("start.tg", lang), reply_markup=ReplyKeyboardRemove())
         await state.set_state(OrderStates.GEO)
         await ask_state(message, state, OrderStates.GEO, lang)
@@ -389,6 +450,29 @@ def get_public_router(
         await update_draft(state, payment_method=text)
         await continue_flow(message, state, OrderStates.METHOD, lang)
 
+    @router.message(OrderStates.TESTS)
+    async def tests_step(message: Message, state: FSMContext) -> None:
+        lang = await get_language(state, message.from_user.id)
+        text = (message.text or "").strip()
+        if is_button(text, "wizard.cancel", lang):
+            await cancel_flow(message, state, lang)
+            return
+        if is_button(text, "wizard.back", lang):
+            await handle_back(message, state, OrderStates.TESTS, lang)
+            return
+        if not text.isdigit():
+            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=tests_keyboard(lang))
+            return
+        value = int(text)
+        if value < 1 or value > 25:
+            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=tests_keyboard(lang))
+            return
+        draft = await update_draft(state, tests_count=value)
+        surcharge = int(draft.get("payout_surcharge") or 0)
+        total = calculate_price(value, surcharge).total
+        await state.update_data(price_eur=total)
+        await continue_flow(message, state, OrderStates.TESTS, lang)
+
     @router.message(OrderStates.PAYOUT)
     async def payout_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
@@ -408,13 +492,15 @@ def get_public_router(
             options = [TEXTS.button(item["key"], lang) for item in PAYOUT_OPTIONS]
             await message.answer(TEXTS.get("wizard.invalid.payout", lang), reply_markup=payout_keyboard(options, lang))
             return
-        await update_draft(
+        draft = await update_draft(
             state,
             payout_option=option["key"],
             payout_surcharge=option["surcharge"],
             withdraw_required=option["withdraw"],
             kyc_required=option["kyc"],
         )
+        tests = int(draft.get("tests_count") or 1)
+        await state.update_data(price_eur=calculate_price(tests, option["surcharge"]).total)
         await continue_flow(message, state, OrderStates.PAYOUT, lang)
 
     @router.message(OrderStates.COMMENTS)
@@ -511,6 +597,17 @@ def get_public_router(
         draft = await get_draft(state)
         price_total = await state.get_data()
         total = price_total.get("price_eur") or calculate_price(int(draft.get("tests_count") or 1), int(draft.get("payout_surcharge") or 0)).total
+        payload_hash = draft.get("payload_hash")
+        if payload_hash:
+            existing = await repo.find_by_payload_hash(message.from_user.id, payload_hash)
+            if existing:
+                await state.update_data(order_id=existing.order_id)
+                await message.answer(
+                    TEXTS.get("order.duplicate", lang, order_id=existing.order_id, total=existing.price_eur or total),
+                    reply_markup=payment_keyboard(lang),
+                )
+                await show_payment(message, state, lang)
+                return
         encrypted_login = encryptor.encrypt(draft.get("login"))
         encrypted_password = encryptor.encrypt(draft.get("password"))
         order_id = await repo.create_order(
@@ -529,10 +626,12 @@ def get_public_router(
                 site_url=draft.get("site_url"),
                 login=encrypted_login,
                 password_enc=encrypted_password,
+                payout_surcharge=int(draft.get("payout_surcharge") or 0),
                 price_eur=total,
                 status="awaiting_payment",
                 payment_network="USDT TRC-20",
                 payment_wallet=config.wallet_trc20,
+                payload_hash=payload_hash,
             )
         )
         await state.update_data(order_id=order_id)
@@ -546,6 +645,10 @@ def get_public_router(
                 geo=format_country(draft.get("geo", "")),
                 total=total,
             ),
+        )
+        await message.answer(
+            TEXTS.get("order.accepted", lang, order_id=order_id, total=total),
+            reply_markup=ReplyKeyboardRemove(),
         )
         await show_payment(message, state, lang)
 
