@@ -3,11 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from aiogram import F, Router
-from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from payment_qa_bot.config import Config
 from payment_qa_bot.keyboards.common import (
@@ -21,16 +20,9 @@ from payment_qa_bot.keyboards.options import methods_keyboard, payout_keyboard
 from payment_qa_bot.models.db import OrderCreate, OrdersRepository
 from payment_qa_bot.services.geo import format_country
 from payment_qa_bot.services.payment_methods import get_methods_for_geo
-from payment_qa_bot.services.payload import (
-    PayloadData,
-    PayloadParseResult,
-    SignatureMismatchError,
-    build_payload_hash,
-    parse_payload,
-)
+from payment_qa_bot.services.payload import PayloadData, PayloadParseResult, SignatureMismatchError, parse_payload
 from payment_qa_bot.services.pricing import calculate_price
 from payment_qa_bot.services.security import CredentialEncryptor, mask_secret
-from payment_qa_bot.services.payouts import PayoutOption, get_payout_option, iter_payout_options
 from payment_qa_bot.states.order import OrderStates
 from payment_qa_bot.texts.catalog import TEXTS
 
@@ -38,7 +30,6 @@ from payment_qa_bot.texts.catalog import TEXTS
 STATE_FLOW = [
     OrderStates.GEO,
     OrderStates.METHOD,
-    OrderStates.TESTS,
     OrderStates.PAYOUT,
     OrderStates.COMMENTS,
     OrderStates.SITE_URL,
@@ -47,44 +38,19 @@ STATE_FLOW = [
 ]
 
 
+PAYOUT_OPTIONS = [
+    {"key": "payout.option.none", "surcharge": 0, "withdraw": False, "kyc": False},
+    {"key": "payout.option.withdraw", "surcharge": 10, "withdraw": True, "kyc": False},
+    {"key": "payout.option.kyc", "surcharge": 25, "withdraw": True, "kyc": True},
+]
+
+
 def get_public_router(
     config: Config,
     repo: OrdersRepository,
     encryptor: CredentialEncryptor,
-    bot_username: str,
 ) -> Router:
     router = Router()
-    router.message.filter(F.chat.type == ChatType.PRIVATE)
-    payout_options: List[PayoutOption] = list(iter_payout_options())
-
-    group_router = Router()
-    group_router.message.filter(F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}))
-
-    async def send_private_redirect(chat_id: int, bot_markup: InlineKeyboardMarkup, event_bot) -> None:
-        try:
-            await event_bot.send_message(chat_id, TEXTS.get("group.redirect", config.default_language), reply_markup=bot_markup)
-        except Exception:  # noqa: BLE001 - avoid crashing if bot cannot send
-            return
-
-    @group_router.message()
-    async def ignore_group_messages(message: Message) -> None:
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text=TEXTS.get("group.button", config.default_language), url=f"https://t.me/{bot_username}")]]
-        )
-        await message.answer(TEXTS.get("group.redirect", config.default_language), reply_markup=keyboard)
-
-    @router.my_chat_member()
-    async def handle_my_chat_member(event: ChatMemberUpdated) -> None:
-        if event.chat.type not in {ChatType.GROUP, ChatType.SUPERGROUP}:
-            return
-        if event.new_chat_member.status not in {ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR}:
-            return
-        keyboard = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text=TEXTS.get("group.button", config.default_language), url=f"https://t.me/{bot_username}")]]
-        )
-        await send_private_redirect(event.chat.id, keyboard, event.bot)
-
-    router.include_router(group_router)
 
     async def get_language(state: FSMContext, user_id: int) -> str:
         data = await state.get_data()
@@ -125,18 +91,10 @@ def get_public_router(
     def is_button(text: Optional[str], key: str, language: str) -> bool:
         return text == TEXTS.button(key, language)
 
-    def resolve_payout(key: Optional[str]) -> Optional[PayoutOption]:
-        if not key:
-            return None
-        for option in payout_options:
-            if option.key == key:
-                return option
-        return None
-
     async def cancel_flow(message: Message, state: FSMContext, language: str) -> None:
         data = await state.get_data()
         order_id = data.get("order_id")
-        if order_id and not data.get("existing_order"):
+        if order_id:
             await repo.update_order(order_id, status="cancelled")
         await state.clear()
         await message.answer(TEXTS.get("confirmation.cancelled", language), reply_markup=ReplyKeyboardRemove())
@@ -161,7 +119,6 @@ def get_public_router(
         checks = [
             (OrderStates.GEO, lambda d: bool(d.get("geo"))),
             (OrderStates.METHOD, lambda d: bool(d.get("payment_method"))),
-            (OrderStates.TESTS, lambda d: int(d.get("tests_count") or 0) >= 1),
             (OrderStates.PAYOUT, lambda d: bool(d.get("payout_option"))),
             (OrderStates.COMMENTS, lambda d: "comments" in d),
             (OrderStates.SITE_URL, lambda d: "site_url" in d),
@@ -188,13 +145,8 @@ def get_public_router(
             methods = get_methods_for_geo(draft.get("geo"))
             keyboard = methods_keyboard(methods, language)
             await message.answer(prompt, reply_markup=keyboard)
-        elif target == OrderStates.TESTS:
-            await message.answer(
-                TEXTS.get("wizard.tests", language),
-                reply_markup=back_cancel_keyboard(language),
-            )
         elif target == OrderStates.PAYOUT:
-            options = [TEXTS.button(option.key, language) for option in payout_options]
+            options = [TEXTS.button(option["key"], language) for option in PAYOUT_OPTIONS]
             await message.answer(
                 TEXTS.get("wizard.payout", language),
                 reply_markup=payout_keyboard(options, language),
@@ -224,16 +176,13 @@ def get_public_router(
         draft = await get_draft(state)
         tests = int(draft.get("tests_count") or 1)
         payout_key = draft.get("payout_option")
-        payout_option = resolve_payout(payout_key)
-        payout_text = TEXTS.button(payout_option.key, language) if payout_option else TEXTS.button("payout.option.none", language)
-        surcharge = payout_option.surcharge if payout_option else int(draft.get("payout_surcharge") or 0)
-        price = calculate_price(tests, surcharge)
+        payout_text = TEXTS.button(payout_key, language) if payout_key else TEXTS.button("payout.option.none", language)
+        price = calculate_price(tests, int(draft.get("payout_surcharge") or 0))
         summary = TEXTS.get(
             "confirmation.body",
             language,
             geo=format_country(draft.get("geo", "—")),
             method=draft.get("payment_method") or "—",
-            tests=tests,
             payout=payout_text,
             site=draft.get("site_url") or "—",
             login=mask_secret(draft.get("login")),
@@ -300,7 +249,6 @@ def get_public_router(
         await state.clear()
         lang = await get_language(state, message.from_user.id)
         payload_value = (command.args or "").strip() if command else ""
-        await state.update_data(existing_order=False, payload_fingerprint=None)
         if payload_value:
             try:
                 parsed: PayloadParseResult = parse_payload(payload_value, config.payload_secret)
@@ -311,11 +259,11 @@ def get_public_router(
                 draft = {"source": "site"}
                 if parsed.data.geo:
                     draft["geo"] = parsed.data.geo
-                tests_count = parsed.data.tests_count if parsed.data.tests_count and parsed.data.tests_count >= 1 else 1
-                draft["tests_count"] = tests_count
+                if parsed.data.tests_count is not None and parsed.data.tests_count >= 1:
+                    draft["tests_count"] = parsed.data.tests_count
                 if parsed.data.payment_method:
                     draft["payment_method"] = parsed.data.payment_method
-                if parsed.data.site_url is not None:
+                if parsed.data.site_url:
                     draft["site_url"] = parsed.data.site_url
                 if parsed.data.login is not None:
                     draft["login"] = parsed.data.login
@@ -323,34 +271,28 @@ def get_public_router(
                     draft["password"] = parsed.data.password
                 if parsed.data.comments is not None:
                     draft["comments"] = parsed.data.comments
-
-                payout_option = None
-                if parsed.data.payout_key:
-                    payout_option = get_payout_option(parsed.data.payout_key)
-                if payout_option is None:
-                    if parsed.data.kyc_required:
-                        payout_option = get_payout_option("payout.option.kyc")
-                    elif parsed.data.withdraw_required:
-                        payout_option = get_payout_option("payout.option.withdraw")
-                if payout_option is None:
-                    payout_option = get_payout_option("payout.option.none")
-
-                if payout_option:
-                    draft["payout_option"] = payout_option.key
-                    draft["payout_surcharge"] = payout_option.surcharge
-                    draft["withdraw_required"] = payout_option.withdraw_required
-                    draft["kyc_required"] = payout_option.kyc_required
-                else:
-                    draft.setdefault("payout_surcharge", 0)
-                    draft.setdefault("withdraw_required", False)
-                    draft.setdefault("kyc_required", False)
-
-                await state.update_data(
-                    draft=draft,
-                    lang=lang,
-                    payload_fingerprint=parsed.data.payload_fingerprint,
-                    site_price_hint=parsed.data.price_total,
-                )
+                payout_key = None
+                if parsed.data.kyc_required:
+                    payout_key = "payout.option.kyc"
+                elif parsed.data.withdraw_required:
+                    payout_key = "payout.option.withdraw"
+                elif parsed.data.withdraw_required is False and parsed.data.kyc_required is False:
+                    payout_key = "payout.option.none"
+                if payout_key:
+                    option = next((item for item in PAYOUT_OPTIONS if item["key"] == payout_key), None)
+                    if option:
+                        draft["payout_option"] = option["key"]
+                        draft["payout_surcharge"] = option["surcharge"]
+                        draft["withdraw_required"] = option["withdraw"]
+                        draft["kyc_required"] = option["kyc"]
+                draft.setdefault("tests_count", 1)
+                if "withdraw_required" not in draft:
+                    draft["withdraw_required"] = False
+                if "kyc_required" not in draft:
+                    draft["kyc_required"] = False
+                if "payout_surcharge" not in draft:
+                    draft["payout_surcharge"] = 0
+                await state.update_data(draft=draft, lang=lang)
                 missing = find_next_missing(draft)
                 if missing is None:
                     await show_confirmation(message, state, lang)
@@ -360,33 +302,13 @@ def get_public_router(
                 return
             await message.answer(TEXTS.get("start.site.invalid", lang), reply_markup=ReplyKeyboardRemove())
             await set_mode(state, "wizard")
-            await state.update_data(
-                draft={
-                    "source": "tg",
-                    "tests_count": 1,
-                    "withdraw_required": False,
-                    "kyc_required": False,
-                    "payout_surcharge": 0,
-                },
-                payload_fingerprint=None,
-                lang=lang,
-            )
+            await state.update_data(draft={"source": "tg", "tests_count": 1, "withdraw_required": False, "kyc_required": False, "payout_surcharge": 0})
             await state.set_state(OrderStates.GEO)
             await ask_state(message, state, OrderStates.GEO, lang)
             return
 
         await set_mode(state, "wizard")
-        await state.update_data(
-            draft={
-                "source": "tg",
-                "tests_count": 1,
-                "withdraw_required": False,
-                "kyc_required": False,
-                "payout_surcharge": 0,
-            },
-            payload_fingerprint=None,
-            lang=lang,
-        )
+        await state.update_data(draft={"source": "tg", "tests_count": 1, "withdraw_required": False, "kyc_required": False, "payout_surcharge": 0})
         await message.answer(TEXTS.get("start.tg", lang), reply_markup=ReplyKeyboardRemove())
         await state.set_state(OrderStates.GEO)
         await ask_state(message, state, OrderStates.GEO, lang)
@@ -467,27 +389,6 @@ def get_public_router(
         await update_draft(state, payment_method=text)
         await continue_flow(message, state, OrderStates.METHOD, lang)
 
-    @router.message(OrderStates.TESTS)
-    async def tests_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.TESTS, lang)
-            return
-        try:
-            tests_value = int(text)
-        except ValueError:
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang))
-            return
-        if not 1 <= tests_value <= 100:
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang))
-            return
-        await update_draft(state, tests_count=tests_value)
-        await continue_flow(message, state, OrderStates.TESTS, lang)
-
     @router.message(OrderStates.PAYOUT)
     async def payout_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
@@ -499,20 +400,20 @@ def get_public_router(
             await handle_back(message, state, OrderStates.PAYOUT, lang)
             return
         option = None
-        for item in payout_options:
-            if text == TEXTS.button(item.key, lang):
+        for item in PAYOUT_OPTIONS:
+            if text == TEXTS.button(item["key"], lang):
                 option = item
                 break
         if option is None:
-            options = [TEXTS.button(item.key, lang) for item in payout_options]
+            options = [TEXTS.button(item["key"], lang) for item in PAYOUT_OPTIONS]
             await message.answer(TEXTS.get("wizard.invalid.payout", lang), reply_markup=payout_keyboard(options, lang))
             return
         await update_draft(
             state,
-            payout_option=option.key,
-            payout_surcharge=option.surcharge,
-            withdraw_required=option.withdraw_required,
-            kyc_required=option.kyc_required,
+            payout_option=option["key"],
+            payout_surcharge=option["surcharge"],
+            withdraw_required=option["withdraw"],
+            kyc_required=option["kyc"],
         )
         await continue_flow(message, state, OrderStates.PAYOUT, lang)
 
@@ -608,33 +509,8 @@ def get_public_router(
             await message.answer(TEXTS.get("confirmation.title", lang), reply_markup=confirmation_keyboard(lang))
             return
         draft = await get_draft(state)
-        data_snapshot = await state.get_data()
-        total = data_snapshot.get("price_eur") or calculate_price(
-            int(draft.get("tests_count") or 1),
-            int(draft.get("payout_surcharge") or 0),
-        ).total
-        payload_hash = build_payload_hash(data_snapshot.get("payload_fingerprint"), message.from_user.id)
-        if payload_hash:
-            existing = await repo.get_by_payload(payload_hash)
-            if existing:
-                await state.update_data(
-                    order_id=existing.order_id,
-                    existing_order=True,
-                    price_eur=existing.price_eur or total,
-                )
-                await message.answer(
-                    TEXTS.get(
-                        "confirmation.duplicate",
-                        lang,
-                        order_id=existing.order_id,
-                        status=existing.status,
-                    )
-                )
-                if existing.status == "awaiting_payment":
-                    await show_payment(message, state, lang)
-                else:
-                    await state.clear()
-                return
+        price_total = await state.get_data()
+        total = price_total.get("price_eur") or calculate_price(int(draft.get("tests_count") or 1), int(draft.get("payout_surcharge") or 0)).total
         encrypted_login = encryptor.encrypt(draft.get("login"))
         encrypted_password = encryptor.encrypt(draft.get("password"))
         order_id = await repo.create_order(
@@ -657,11 +533,9 @@ def get_public_router(
                 status="awaiting_payment",
                 payment_network="USDT TRC-20",
                 payment_wallet=config.wallet_trc20,
-                payload_hash=payload_hash,
             )
         )
-        await state.update_data(order_id=order_id, existing_order=False, payload_fingerprint=None, price_eur=total)
-        await message.answer(TEXTS.get("confirmation.accepted", lang, order_id=order_id))
+        await state.update_data(order_id=order_id)
         await notify_admins(
             message,
             TEXTS.get(

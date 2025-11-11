@@ -24,17 +24,16 @@ TEXTS = TextCatalog(
         "en": {
             "start.site.invalid": "We could not read the order payload. Please open the link from the website again or start without parameters.",
             "start.tg": "Welcome! Let's create a new payment QA order. We'll guide you through the steps.",
-            "wizard.geo": "🌍 Step 1 — Select GEO\n\nChoose the country for testing:",
-            "wizard.method": "💳 Step 2 — Payment method\n\nSelect the payment method to be tested from the list below.",
-            "wizard.tests": "🧪 Step 3 — Number of tests\n\nSend how many real transactions we should run (1–100).",
-            "wizard.payout": "💼 Step 4 — Payout requirements\n\nPlease select payout option:",
+            "wizard.geo": "🌍 Step 1/6 — Select GEO\n\nChoose the country for testing:",
+            "wizard.method": "💳 Step 2/6 — Payment method\n\nSelect the payment method to be tested from the list below.",
+            "wizard.payout": "💼 Step 3/6 — Payout requirements\n\nPlease select payout option:",
             "wizard.invalid.payout": "Please choose one of the payout options.",
             "payout.option.none": "No payout needed (0 €)",
             "payout.option.withdraw": "Need payout (+10 €) — requires account with withdrawal capability",
             "payout.option.kyc": "Need full KYC verification (+25 €) — requires local tester data",
-            "wizard.comments": "📝 Step 5 — Comments\n\nAny special comments or requests? Send text or choose Skip.",
-            "wizard.site": "🔗 Step 6 — Website URL\n\nSend the checkout page URL starting with http:// or https://.",
-            "wizard.login": "🔐 Step 7 — Login for testers\n\nSend the login if required or choose Skip.",
+            "wizard.comments": "📝 Step 4/6 — Comments\n\nAny special comments or requests? Send text or choose Skip.",
+            "wizard.site": "🔗 Step 5/6 — Website URL\n\nSend the checkout page URL starting with http:// or https://.",
+            "wizard.login": "🔐 Step 6/6 — Login for testers\n\nSend the login if required or choose Skip.",
             "wizard.password": "Password for testers\n\nSend the password or choose Skip.",
             "wizard.skip": "Skip",
             "wizard.back": "◀️ Back",
@@ -54,7 +53,6 @@ TEXTS = TextCatalog(
                 "<b>Summary</b>\n"
                 "GEO: {geo}\n"
                 "Payment method: {method}\n"
-                "Tests: {tests}\n"
                 "Payout option: {payout}\n"
                 "Website: {site}\n"
                 "Login: {login}\n"
@@ -66,8 +64,6 @@ TEXTS = TextCatalog(
             "confirmation.edit": "✏️ Edit data",
             "confirmation.cancel": "❌ Cancel",
             "confirmation.cancelled": "Order cancelled. If you change your mind, start again with /start.",
-            "confirmation.accepted": "✅ Order #{order_id} saved. Payment instructions are below.",
-            "confirmation.duplicate": "ℹ️ We already have this request as order #{order_id}. Current status: {status}.",
             "confirmation.ready": "Great! Here are the payment details.",
             "payment.instructions": (
                 "Send strictly via TRC-20 (Tron) network to: <code>{wallet}</code>.\n"
@@ -91,23 +87,20 @@ TEXTS = TextCatalog(
             "admin.stats.header": "Admin dashboard",
             "admin.stats.line": "{status}: {count}",
             "admin.no.orders": "No orders found.",
-            "group.redirect": "Please write to the bot in direct messages to place an order.",
-            "group.button": "Open chat",
         },
         "ru": {
             "start.site.invalid": "Не удалось распознать параметры заявки. Откройте ссылку с сайта ещё раз или используйте /start без параметров.",
             "start.tg": "Привет! Давайте оформим заявку на QA платежей. Я помогу пройти все шаги.",
-            "wizard.geo": "🌍 Шаг 1 — Выбор GEO\n\nВыберите страну для тестирования:",
-            "wizard.method": "💳 Шаг 2 — Метод оплаты\n\nВыберите способ оплаты для теста из списка ниже.",
-            "wizard.tests": "🧪 Шаг 3 — Количество тестов\n\nОтправьте, сколько оплат нужно выполнить (от 1 до 100).",
-            "wizard.payout": "💼 Шаг 4 — Требования к выплатам\n\nВыберите нужный вариант:",
+            "wizard.geo": "🌍 Шаг 1/6 — Выбор GEO\n\nВыберите страну для тестирования:",
+            "wizard.method": "💳 Шаг 2/6 — Метод оплаты\n\nВыберите способ оплаты для теста из списка ниже.",
+            "wizard.payout": "💼 Шаг 3/6 — Требования к выплатам\n\nВыберите нужный вариант:",
             "wizard.invalid.payout": "Пожалуйста, выберите один из вариантов выплаты.",
             "payout.option.none": "Выплата не нужна (0 €)",
             "payout.option.withdraw": "Нужна выплата (+10 €) — требуется аккаунт с выводом",
             "payout.option.kyc": "Нужна полная KYC-верификация (+25 €) — требуется локальный тестер",
-            "wizard.comments": "📝 Шаг 5 — Комментарии\n\nЕсли есть особые запросы — напишите или нажмите «Пропустить».",
-            "wizard.site": "🔗 Шаг 6 — Сайт для теста\n\nОтправьте ссылку, начинающуюся с http:// или https://.",
-            "wizard.login": "🔐 Шаг 7 — Логин для тестеров\n\nПришлите логин или пропустите.",
+            "wizard.comments": "📝 Шаг 4/6 — Comments\n\nAny special comments or requests? Send text or choose Skip.",
+            "wizard.site": "🔗 Шаг 5/6 — Сайт для теста\n\nОтправьте ссылку, начинающуюся с http:// или https://.",
+            "wizard.login": "🔐 Шаг 6/6 — Логин для тестеров\n\nПришлите логин или пропустите.",
             "wizard.password": "Пароль для тестеров\n\nПришлите пароль или пропустите.",
             "wizard.skip": "Пропустить",
             "wizard.back": "◀️ Назад",
@@ -127,7 +120,6 @@ TEXTS = TextCatalog(
                 "<b>Проверьте детали</b>\n"
                 "GEO: {geo}\n"
                 "Метод оплаты: {method}\n"
-                "Количество тестов: {tests}\n"
                 "Вариант выплаты: {payout}\n"
                 "Сайт: {site}\n"
                 "Логин: {login}\n"
@@ -139,8 +131,6 @@ TEXTS = TextCatalog(
             "confirmation.edit": "✏️ Изменить данные",
             "confirmation.cancel": "❌ Отмена",
             "confirmation.cancelled": "Заявка отменена. Если передумаете — начните заново через /start.",
-            "confirmation.accepted": "✅ Заявка #{order_id} сохранена. Ниже реквизиты для оплаты.",
-            "confirmation.duplicate": "ℹ️ Такая заявка уже есть в системе (#{order_id}). Текущий статус: {status}.",
             "confirmation.ready": "Отлично! Вот реквизиты для оплаты.",
             "payment.instructions": (
                 "Отправьте строго по сети TRC-20 (Tron) на кошелёк: <code>{wallet}</code>.\n"
@@ -164,8 +154,6 @@ TEXTS = TextCatalog(
             "admin.stats.header": "Админ-панель",
             "admin.stats.line": "{status}: {count}",
             "admin.no.orders": "Заказов нет.",
-            "group.redirect": "Пожалуйста, напишите боту в личные сообщения, чтобы оформить заказ.",
-            "group.button": "Написать боту",
         },
     }
 )
