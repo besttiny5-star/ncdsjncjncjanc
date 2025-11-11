@@ -186,19 +186,6 @@ class OrdersRepository:
             rows = await cursor.fetchall()
         return [self._row_to_order(row) for row in rows]
 
-    async def list_user_orders(self, user_id: int, limit: int = 5) -> List[OrderRecord]:
-        query = """
-            SELECT * FROM orders
-            WHERE user_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-        """
-        async with aiosqlite.connect(self._db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(query, (user_id, limit))
-            rows = await cursor.fetchall()
-        return [self._row_to_order(row) for row in rows]
-
     async def get_stats(self) -> Dict[str, int]:
         async with aiosqlite.connect(self._db_path) as db:
             db.row_factory = aiosqlite.Row
