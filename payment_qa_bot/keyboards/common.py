@@ -43,8 +43,8 @@ def confirmation_keyboard(language: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [_button(TEXTS.button("confirmation.confirm", language))],
-            [_button(TEXTS.button("confirmation.edit", language))],
-            [_button(TEXTS.button("confirmation.cancel", language))],
+            [_button(TEXTS.button("wizard.back", language))],
+            [_button(TEXTS.button("confirmation.add_order", language))],
         ],
         resize_keyboard=True,
     )
@@ -53,10 +53,9 @@ def confirmation_keyboard(language: str) -> ReplyKeyboardMarkup:
 def payment_keyboard(language: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [_button(TEXTS.button("payment.button.paid", language))],
-            [_button(TEXTS.button("payment.button.help", language))],
-            [_button(TEXTS.button("payment.button.support", language))],
-            [_button(TEXTS.button("wizard.cancel", language))],
+            [_button(TEXTS.button("payment.button.new_order", language))],
+            [_button(TEXTS.button("payment.button.view_orders", language))],
+            [_button(TEXTS.button("payment.button.done", language))],
         ],
         resize_keyboard=True,
     )
