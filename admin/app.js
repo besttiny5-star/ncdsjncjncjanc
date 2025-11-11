@@ -1,6 +1,5 @@
 const STATUSES = {
   awaiting_payment: { label: 'Ожидает оплаты', color: '#fbbf24', emoji: '⏳' },
-  proof_received: { label: 'Чек получен', color: '#f97316', emoji: '🧾' },
   paid: { label: 'Оплачено', color: '#34d399', emoji: '💰' },
   in_progress: { label: 'В процессе', color: '#60a5fa', emoji: '🔄' },
   completed: { label: 'Завершено', color: '#22c55e', emoji: '✅' },
@@ -12,17 +11,6 @@ const PACKAGE_LABELS = {
   mini: 'Mini Audit',
   retainer: 'Retainer'
 };
-
-const SOURCE_LABELS = {
-  bot: 'Бот',
-  site: 'Сайт',
-  unknown: 'Неизвестно'
-};
-
-function formatSourceLabel(source) {
-  if (!source) return SOURCE_LABELS.unknown;
-  return SOURCE_LABELS[source] || SOURCE_LABELS.unknown;
-}
 
 const STORAGE_KEYS = {
   filters: 'paymentqa:orders_filters',
@@ -53,7 +41,7 @@ const state = {
   pageSize: 25,
   selected: new Set(),
   charts: {},
-  lastSync: null
+  lastSync: new Date()
 };
 
 const currencyFormatter = new Intl.NumberFormat('ru-RU', {
@@ -83,7 +71,6 @@ const EVENT_ICONS = {
 
 const CHART_COLORS = {
   awaiting_payment: '#f59e0b',
-  proof_received: '#f97316',
   paid: '#34d399',
   in_progress: '#3b82f6',
   completed: '#059669',
@@ -92,79 +79,38 @@ const CHART_COLORS = {
 
 const PACKAGE_COLORS = ['#d8b4fe', '#c084fc', '#a855f7'];
 
-let isDashboardInitialized = false;
+function init() {
+  if (!window.PaymentQA_DATA) {
+    console.error('Не найдены данные PaymentQA_DATA');
+    return;
+  }
 
-function applyDashboardData(data) {
-  state.orders = (data.orders || []).map((order) => ({
+  state.orders = window.PaymentQA_DATA.orders.map((order) => ({
     ...order,
-    createdAt: order.createdAt instanceof Date ? order.createdAt : new Date(order.createdAt),
-    paidAt: order.paidAt ? (order.paidAt instanceof Date ? order.paidAt : new Date(order.paidAt)) : null,
-    startedAt: order.startedAt ? (order.startedAt instanceof Date ? order.startedAt : new Date(order.startedAt)) : null,
-    completedAt: order.completedAt ? (order.completedAt instanceof Date ? order.completedAt : new Date(order.completedAt)) : null
+    createdAt: new Date(order.createdAt),
+    paidAt: order.paidAt ? new Date(order.paidAt) : null,
+    startedAt: order.startedAt ? new Date(order.startedAt) : null,
+    completedAt: order.completedAt ? new Date(order.completedAt) : null
   }));
-  const knownIds = new Set(state.orders.map((order) => order.id));
-  state.selected = new Set([...state.selected].filter((id) => knownIds.has(id)));
-  const maxPage = Math.max(1, Math.ceil(state.orders.length / state.pageSize) || 1);
-  if (state.page > maxPage) {
-    state.page = maxPage;
-  }
-  state.testers = Array.isArray(data.testers) ? data.testers : [];
-  state.activity = (data.activity || [])
-    .map((item) => ({
-      ...item,
-      createdAt: item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt)
-    }))
+  state.testers = window.PaymentQA_DATA.testers;
+  state.activity = window.PaymentQA_DATA.activity
+    .map((item) => ({ ...item, createdAt: new Date(item.createdAt) }))
     .sort((a, b) => b.createdAt - a.createdAt);
-  state.countries = data.countries || {};
-}
+  state.countries = window.PaymentQA_DATA.countries;
 
-function updateLastSyncLabel() {
-  const label = document.getElementById('last-sync');
-  if (!label || !state.lastSync) return;
-  const diffMs = state.lastSync.getTime() - Date.now();
-  const diffMinutes = Math.round(Math.abs(diffMs) / 60000);
-  if (diffMinutes < 1) {
-    label.textContent = 'только что';
-    return;
-  }
-  if (diffMinutes < 60) {
-    label.textContent = durationFormatter.format(-diffMinutes, 'minute');
-    return;
-  }
-  const diffHours = Math.round(diffMinutes / 60);
-  if (diffHours < 24) {
-    label.textContent = durationFormatter.format(-diffHours, 'hour');
-    return;
-  }
-  const diffDays = Math.round(diffHours / 24);
-  label.textContent = durationFormatter.format(-diffDays, 'day');
-}
-
-function bootstrapDashboard(data, { isUpdate = false } = {}) {
-  applyDashboardData(data);
-  state.lastSync = new Date();
-  updateLastSyncLabel();
-
-  if (!isDashboardInitialized) {
-    hydrateFilters();
-    hydratePageSize();
-    buildStatusChips();
-    populateGeoSelect();
-    populateTesterSelect();
-    syncFiltersForm();
-    attachEventListeners();
-    renderAll();
-    setInterval(updateLastSyncLabel, 30000);
-    isDashboardInitialized = true;
-    return;
-  }
-
+  hydrateFilters();
+  hydratePageSize();
+  buildStatusChips();
   populateGeoSelect();
   populateTesterSelect();
+  syncFiltersForm();
+  attachEventListeners();
   renderAll();
-  if (isUpdate) {
-    showToast('🔄', 'Данные обновлены');
-  }
+
+  setInterval(() => {
+    state.lastSync = new Date();
+    document.getElementById('last-sync').textContent = 'только что';
+  }, 30000);
 }
 
 function hydrateFilters() {
@@ -196,20 +142,10 @@ function hydratePageSize() {
 }
 
 function attachEventListeners() {
-  document.getElementById('refresh-data').addEventListener('click', async () => {
-    if (!window.PaymentQA) {
-      showToast('⚠️', 'API недоступно');
-      return;
-    }
-    const button = document.getElementById('refresh-data');
-    button.disabled = true;
-    try {
-      await window.PaymentQA.refresh();
-    } catch (error) {
-      showToast('⚠️', 'Не удалось обновить данные');
-    } finally {
-      button.disabled = false;
-    }
+  document.getElementById('refresh-data').addEventListener('click', () => {
+    showToast('🔄', 'Данные обновлены');
+    state.lastSync = new Date();
+    renderAll();
   });
 
   document.getElementById('export-dashboard').addEventListener('click', () => {
@@ -408,57 +344,21 @@ function populateGeoSelect() {
 
 function populateTesterSelect() {
   const select = document.getElementById('tester-select');
-  const previous = String(state.filters.tester || 'all');
-  select.innerHTML = '';
-  const defaults = [
-    { value: 'all', label: 'Все' },
-    { value: 'none', label: 'Не назначен' }
-  ];
-  defaults.forEach((item) => {
-    const option = document.createElement('option');
-    option.value = item.value;
-    option.textContent = item.label;
-    select.appendChild(option);
-  });
-
   state.testers.forEach((tester) => {
     const option = document.createElement('option');
     option.value = tester.id;
-    option.textContent = `${tester.name} (${tester.geoFocus ?? '—'})`;
+    option.textContent = `${tester.name} (${tester.geoFocus})`;
+    if (String(state.filters.tester) === String(tester.id)) option.selected = true;
     select.appendChild(option);
   });
-
-  if (select.querySelector(`option[value="${previous}"]`)) {
-    select.value = previous;
-  } else {
-    select.value = 'all';
-    state.filters.tester = 'all';
-  }
 
   const bulkSelect = document.getElementById('bulk-tester');
-  const bulkPrevious = bulkSelect.value;
-  bulkSelect.innerHTML = '';
-  const bulkDefaults = [
-    { value: '', label: 'Назначить тестера' },
-    { value: 'none', label: 'Снять тестера' }
-  ];
-  bulkDefaults.forEach((item) => {
-    const option = document.createElement('option');
-    option.value = item.value;
-    option.textContent = item.label;
-    bulkSelect.appendChild(option);
-  });
-
   state.testers.forEach((tester) => {
     const option = document.createElement('option');
     option.value = tester.id;
-    option.textContent = `${tester.name} (${tester.geoFocus ?? '—'})`;
+    option.textContent = tester.name;
     bulkSelect.appendChild(option);
   });
-
-  if (bulkSelect.querySelector(`option[value="${bulkPrevious}"]`)) {
-    bulkSelect.value = bulkPrevious;
-  }
 }
 
 function syncFiltersForm() {
@@ -1047,10 +947,7 @@ function renderActivity() {
     const meta = document.createElement('div');
     meta.className = 'activity-card__meta';
     const icon = EVENT_ICONS[item.eventType] || '📌';
-    const createdAt = item.createdAt instanceof Date ? item.createdAt : new Date(item.createdAt);
-    const time = createdAt instanceof Date && !Number.isNaN(createdAt)
-      ? createdAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-      : '—';
+    const time = item.createdAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     meta.innerHTML = `<span>${icon}</span><span>${time}</span>`;
 
     const badge = document.createElement('span');
@@ -1168,14 +1065,10 @@ function sortOrders(orders) {
   return [...orders].sort((a, b) => {
     let aValue = a[key];
     let bValue = b[key];
-  if (key === 'client') {
-    aValue = (a.client.username || a.client.telegramId || '').toString();
-    bValue = (b.client.username || b.client.telegramId || '').toString();
-  }
-  if (key === 'source') {
-    aValue = formatSourceLabel(a.source);
-    bValue = formatSourceLabel(b.source);
-  }
+    if (key === 'client') {
+      aValue = (a.client.username || a.client.telegramId || '').toString();
+      bValue = (b.client.username || b.client.telegramId || '').toString();
+    }
     if (key === 'testerId') {
       aValue = a.testerId || 0;
       bValue = b.testerId || 0;
@@ -1231,42 +1124,30 @@ function renderOrders() {
     numberCell.appendChild(link);
 
     const createdCell = document.createElement('td');
-    if (order.createdAt instanceof Date && !Number.isNaN(order.createdAt.valueOf())) {
-      createdCell.textContent = `${order.createdAt.toLocaleDateString('ru-RU')} ${order.createdAt.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })}`;
-    } else {
-      createdCell.textContent = '—';
-    }
+    createdCell.textContent = `${order.createdAt.toLocaleDateString('ru-RU')} ${order.createdAt.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
 
     const clientCell = document.createElement('td');
-    const client = order.client || {};
     clientCell.innerHTML = `
-      <strong>${client.username ? '@' + client.username : 'Нет username'}</strong><br />
-      <span>${client.telegramId || '—'}</span>`;
-
-  const sourceCell = document.createElement('td');
-  const sourceLabel = formatSourceLabel(order.source);
-  const sourceKey = order.source || 'unknown';
-  sourceCell.innerHTML = `<span class="source-badge source-${sourceKey}">${sourceLabel}</span>`;
+      <strong>${order.client.username ? '@' + order.client.username : 'Нет username'}</strong><br />
+      <span>${order.client.telegramId || '—'}</span>`;
 
     const packageCell = document.createElement('td');
-    const packageLabel = PACKAGE_LABELS[order.packageType] || order.packageType || '—';
-    packageCell.innerHTML = `<span class="package-badge">${packageLabel}</span>`;
+    packageCell.innerHTML = `<span class="package-badge">${PACKAGE_LABELS[order.packageType]}</span>`;
 
     const geoCell = document.createElement('td');
     const geoInfo = state.countries[order.geo];
     geoCell.textContent = geoInfo ? `${geoInfo.flag} ${geoInfo.name}` : order.geo;
 
     const amountCell = document.createElement('td');
-    amountCell.textContent = Number.isFinite(order.priceEur)
-      ? currencyFormatter.format(order.priceEur)
-      : '—';
+    amountCell.textContent = currencyFormatter.format(order.priceEur);
 
-  const statusCell = document.createElement('td');
-  const statusMeta = STATUSES[order.status] || { label: order.status, emoji: '❔' };
-  statusCell.innerHTML = `<span class="order-status ${order.status}">${statusMeta.emoji} ${statusMeta.label}</span>`;
+    const statusCell = document.createElement('td');
+    statusCell.innerHTML = `<span class="order-status ${order.status}">${STATUSES[order.status].emoji} ${
+      STATUSES[order.status].label
+    }</span>`;
 
     const testerCell = document.createElement('td');
     if (order.testerId) {
@@ -1292,7 +1173,6 @@ function renderOrders() {
       numberCell,
       createdCell,
       clientCell,
-      sourceCell,
       packageCell,
       geoCell,
       amountCell,
@@ -1476,39 +1356,24 @@ function openOrderModal(orderId) {
   const dialog = document.getElementById('order-modal');
   const container = document.getElementById('order-detail');
   const country = state.countries[order.geo];
-  const client = order.client || {};
-  const packageLabel = PACKAGE_LABELS[order.packageType] || order.packageType || '—';
-  const amountLabel = Number.isFinite(order.priceEur) ? currencyFormatter.format(order.priceEur) : '—';
-  const sourceLabel = formatSourceLabel(order.source);
-  const timeline = ['Создан', 'Чек получен', 'Оплачен', 'В работе', 'Завершён'];
+
+  const timeline = ['Создан', 'Оплачен', 'В работе', 'Завершён'];
   const timelineStatus = [
     true,
-    Boolean(order.paymentProof),
     Boolean(order.paidAt),
     Boolean(order.startedAt || order.status === 'completed'),
     Boolean(order.completedAt)
   ];
-  const attachments = Array.isArray(order.attachments) ? order.attachments : [];
-  const proof = order.paymentProof;
-  const proofUploadedAt = proof?.uploadedAt ? new Date(proof.uploadedAt) : null;
-  const testerOptions = state.testers.length
-    ? state.testers
-        .map(
-          (item) =>
-            `<option value="${item.id}" ${item.id === order.testerId ? 'selected' : ''}>${item.name} (${item.geoFocus || '—'})</option>`
-        )
-        .join('')
-    : '<option value="">Нет доступных тестеров</option>';
 
   container.innerHTML = `
     <div class="order-detail">
       <section class="order-section">
         <h4>Информация о клиенте</h4>
         <div class="order-grid">
-          <div class="order-grid__item"><span>Username</span>${client.username ? '@' + client.username : '—'}</div>
-          <div class="order-grid__item"><span>Telegram ID</span>${client.telegramId || '—'}</div>
-          <div class="order-grid__item"><span>Email</span>${client.email || '—'}</div>
-          <div class="order-grid__item"><span>Телефон</span>${client.phone || '—'}</div>
+          <div class="order-grid__item"><span>Username</span>${order.client.username ? '@' + order.client.username : '—'}</div>
+          <div class="order-grid__item"><span>Telegram ID</span>${order.client.telegramId || '—'}</div>
+          <div class="order-grid__item"><span>Email</span>${order.client.email || '—'}</div>
+          <div class="order-grid__item"><span>Телефон</span>${order.client.phone || '—'}</div>
         </div>
       </section>
       <section class="order-section">
@@ -1524,15 +1389,16 @@ function openOrderModal(orderId) {
       <section class="order-section">
         <h4>Детали заказа</h4>
         <div class="order-grid">
-          <div class="order-grid__item"><span>Пакет</span>${packageLabel}</div>
-          <div class="order-grid__item"><span>Источник</span>${sourceLabel}</div>
-          <div class="order-grid__item"><span>GEO</span>${country ? `${country.flag} ${country.name}` : order.geo || '—'}</div>
-          <div class="order-grid__item"><span>Сумма</span>${amountLabel}</div>
+          <div class="order-grid__item"><span>Пакет</span>${PACKAGE_LABELS[order.packageType]}</div>
+          <div class="order-grid__item"><span>GEO</span>${country ? `${country.flag} ${country.name}` : order.geo}</div>
+          <div class="order-grid__item"><span>Сумма</span>${currencyFormatter.format(order.priceEur)}</div>
+          <div class="order-grid__item"><span>Метод оплаты</span>${order.paymentMethod}</div>
         </div>
         <div class="order-grid">
-          <div class="order-grid__item"><span>Метод оплаты</span>${order.paymentMethod || '—'}</div>
           <div class="order-grid__item"><span>Сайт</span>${
-            order.websiteUrl ? `<a href="${order.websiteUrl}" target="_blank">${order.websiteUrl}</a>` : '—'
+            order.websiteUrl
+              ? `<a href="${order.websiteUrl}" target="_blank">${order.websiteUrl}</a>`
+              : '—'
           }</div>
           <div class="order-grid__item"><span>Логин</span>${order.credentials?.login || '—'}</div>
           <div class="order-grid__item"><span>Пароль</span>${order.credentials?.password ? '••••••' : '—'}</div>
@@ -1540,54 +1406,38 @@ function openOrderModal(orderId) {
         <p><span class="badge">Комментарий клиента</span><br />${order.comments || 'Нет комментариев'}</p>
       </section>
       <section class="order-section">
-        <h4>Файлы от клиента (${attachments.length})</h4>
+        <h4>Файлы от клиента (${order.attachments.length || 0})</h4>
         <div class="files-grid">
-          ${
-            attachments.length
-              ? attachments
-                  .map((file) => {
-                    const fileName = file.fileName || file.title || 'Файл без имени';
-                    const fileUrl = file.url || '#';
-                    if (file.type === 'image') {
-                      return `<div class="file-card"><img src="${fileUrl}" alt="${fileName}" /><div>${fileName}</div><div class="file-card__actions"><a class="btn btn--soft" href="${fileUrl}" target="_blank">Просмотр</a><a class="btn btn--ghost" href="${fileUrl}" download>Скачать</a></div></div>`;
-                    }
-                    if (file.type === 'video') {
-                      return `<div class="file-card"><video src="${fileUrl}" controls></video><div>${fileName}</div><div class="file-card__actions"><a class="btn btn--ghost" href="${fileUrl}" download>Скачать</a></div></div>`;
-                    }
-                    return `<div class="file-card"><div>${fileName}</div><div class="file-card__actions"><a class="btn btn--ghost" href="${fileUrl}" target="_blank">Открыть</a></div></div>`;
-                  })
-                  .join('')
-              : '<p>Нет прикреплённых файлов</p>'
-          }
+          ${order.attachments
+            .map((file) => {
+              if (file.type === 'image') {
+                return `<div class="file-card"><img src="${file.url}" alt="${file.fileName}" /><div>${file.fileName}</div><div class="file-card__actions"><a class="btn btn--soft" href="${file.url}" target="_blank">Просмотр</a><a class="btn btn--ghost" href="${file.url}" download>Скачать</a></div></div>`;
+              }
+              if (file.type === 'video') {
+                return `<div class="file-card"><video src="${file.url}" controls></video><div>${file.fileName}</div><div class="file-card__actions"><a class="btn btn--ghost" href="${file.url}" download>Скачать</a></div></div>`;
+              }
+              return `<div class="file-card"><div>${file.fileName}</div><div class="file-card__actions"><a class="btn btn--ghost" href="${file.url}" target="_blank">Открыть</a></div></div>`;
+            })
+            .join('') || '<p>Нет прикреплённых файлов</p>'}
         </div>
       </section>
       <section class="order-section">
         <h4>Подтверждение оплаты</h4>
-        ${
-          proof
-            ? `<p>🧾 Чек получен ${proofUploadedAt ? proofUploadedAt.toLocaleString('ru-RU') : 'дата неизвестна'}</p>
-               ${
-                 proof.txid || proof.fileId
-                   ? `<div class="order-grid">${
-                       [
-                         proof.txid ? `<div class="order-grid__item"><span>TXID</span>${proof.txid}</div>` : '',
-                         proof.fileId ? `<div class="order-grid__item"><span>File ID</span>${proof.fileId}</div>` : ''
-                       ].join('')
-                     }</div>`
-                   : ''
-               }
-               ${proof.url ? `<img src="${proof.url}" alt="Чек оплаты" style="max-height:240px;border-radius:12px;object-fit:cover;" />` : ''}`
-            : `<p>⏳ Ожидается подтверждение оплаты.</p>`
-        }
+        ${order.paymentProof
+          ? `<p>✅ Чек получен ${new Date(order.paymentProof.uploadedAt).toLocaleString('ru-RU')} от ${order.paymentProof.admin || '—'}</p>
+             <img src="${order.paymentProof.url}" alt="Чек оплаты" style="max-height:240px;border-radius:12px;object-fit:cover;" />`
+          : `<p>⏳ Ожидается подтверждение оплаты.</p>`}
       </section>
       <section class="order-section">
         <h4>Назначение тестера</h4>
         ${
           tester
-            ? `<div><strong>${tester.name}</strong> (${tester.geoFocus || '—'})</div><button class="btn btn--ghost" onclick="alert('Снять тестера (демо)')">Снять тестера</button>`
+            ? `<div><strong>${tester.name}</strong> (${tester.geoFocus})</div><button class="btn btn--ghost" onclick="alert('Снять тестера (демо)')">Снять тестера</button>`
             : '<p>Тестер не назначен</p>'
         }
-        <label class="input"><span>Выбрать тестера</span><select id="modal-tester">${testerOptions}</select></label>
+        <label class="input"><span>Выбрать тестера</span><select id="modal-tester">${state.testers
+          .map((item) => `<option value="${item.id}" ${item.id === order.testerId ? 'selected' : ''}>${item.name}</option>`)
+          .join('')}</select></label>
         <button class="btn btn--primary" onclick="alert('Назначить тестера (демо)')">Назначить тестера</button>
       </section>
     </div>`;
@@ -1618,7 +1468,6 @@ function exportOrdersToCsv(selectedIds) {
         order.createdAt.toISOString(),
         order.client.username || '',
         order.client.telegramId || '',
-        formatSourceLabel(order.source),
         PACKAGE_LABELS[order.packageType],
         order.geo,
         order.priceEur,
@@ -1640,7 +1489,6 @@ function exportOrdersToCsv(selectedIds) {
     'Дата создания',
     'Username клиента',
     'Telegram ID клиента',
-    'Источник',
     'Пакет',
     'GEO',
     'Сумма',
@@ -1736,32 +1584,4 @@ function diffInMinutes(start, end) {
   return Math.round((end - start) / 60000);
 }
 
-function scheduleBootstrap(data, { isUpdate = false } = {}) {
-  if (document.readyState === 'loading') {
-    document.addEventListener(
-      'DOMContentLoaded',
-      () => bootstrapDashboard(data, { isUpdate }),
-      { once: true }
-    );
-    return;
-  }
-  bootstrapDashboard(data, { isUpdate });
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.PaymentQA?.data) {
-    bootstrapDashboard(window.PaymentQA.data);
-  }
-});
-
-window.addEventListener('paymentqa:data-ready', (event) => {
-  if (event.detail) {
-    scheduleBootstrap(event.detail, { isUpdate: false });
-  }
-});
-
-window.addEventListener('paymentqa:data-updated', (event) => {
-  if (event.detail) {
-    scheduleBootstrap(event.detail, { isUpdate: true });
-  }
-});
+document.addEventListener('DOMContentLoaded', init);

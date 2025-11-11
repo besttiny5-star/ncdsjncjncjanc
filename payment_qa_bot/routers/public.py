@@ -5,9 +5,8 @@ from typing import Any, Dict, List, Optional
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
-from aiogram.filters.chat_type import ChatTypeFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove
 
 from payment_qa_bot.config import Config
 from payment_qa_bot.keyboards.common import (
@@ -24,14 +23,12 @@ from payment_qa_bot.services.payment_methods import get_methods_for_geo
 from payment_qa_bot.services.payload import PayloadData, PayloadParseResult, SignatureMismatchError, parse_payload
 from payment_qa_bot.services.pricing import calculate_price
 from payment_qa_bot.services.security import CredentialEncryptor, mask_secret
-from payment_qa_bot.services.order_hash import build_payload_hash
 from payment_qa_bot.states.order import OrderStates
 from payment_qa_bot.texts.catalog import TEXTS
 
 
 STATE_FLOW = [
     OrderStates.GEO,
-    OrderStates.TESTS,
     OrderStates.METHOD,
     OrderStates.PAYOUT,
     OrderStates.COMMENTS,
@@ -54,23 +51,6 @@ def get_public_router(
     encryptor: CredentialEncryptor,
 ) -> Router:
     router = Router()
-    group_router = Router()
-    group_router.message.filter(ChatTypeFilter(chat_type=["group", "supergroup"]))
-    router.include_router(group_router)
-
-    bot_profile_cache: Dict[str, str] = {}
-
-    @group_router.message()
-    async def handle_group(message: Message) -> None:
-        if "username" not in bot_profile_cache:
-            me = await message.bot.get_me()
-            bot_profile_cache["username"] = me.username or ""
-        username = bot_profile_cache.get("username", "")
-        language = config.default_language
-        button = InlineKeyboardButton(text=TEXTS.get("group.open", language), url=f"https://t.me/{username}")
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[button]])
-        await message.answer(TEXTS.get("group.prompt", language), reply_markup=keyboard)
-        return
 
     async def get_language(state: FSMContext, user_id: int) -> str:
         data = await state.get_data()
@@ -138,7 +118,6 @@ def get_public_router(
     def find_next_missing(draft: Dict[str, Any]) -> Optional[OrderStates]:
         checks = [
             (OrderStates.GEO, lambda d: bool(d.get("geo"))),
-            (OrderStates.TESTS, lambda d: int(d.get("tests_count") or 0) >= 1),
             (OrderStates.METHOD, lambda d: bool(d.get("payment_method"))),
             (OrderStates.PAYOUT, lambda d: bool(d.get("payout_option"))),
             (OrderStates.COMMENTS, lambda d: "comments" in d),
@@ -157,12 +136,6 @@ def get_public_router(
             await message.answer(
                 TEXTS.get("wizard.geo", language),
                 reply_markup=geo_keyboard(config.geo_whitelist, language),
-            )
-        elif target == OrderStates.TESTS:
-            quick_rows = [["1", "3", "5"], ["10"]]
-            await message.answer(
-                TEXTS.get("wizard.tests", language),
-                reply_markup=back_cancel_keyboard(language, quick_rows),
             )
         elif target == OrderStates.METHOD:
             geo_label = format_country(draft.get("geo", "")) if draft.get("geo") else ""
@@ -208,7 +181,6 @@ def get_public_router(
         summary = TEXTS.get(
             "confirmation.body",
             language,
-            tests=tests,
             geo=format_country(draft.get("geo", "—")),
             method=draft.get("payment_method") or "—",
             payout=payout_text,
@@ -320,10 +292,7 @@ def get_public_router(
                     draft["kyc_required"] = False
                 if "payout_surcharge" not in draft:
                     draft["payout_surcharge"] = 0
-                update_payload = {"draft": draft, "lang": lang}
-                if parsed.data.price_eur is not None:
-                    update_payload["price_eur"] = parsed.data.price_eur
-                await state.update_data(**update_payload)
+                await state.update_data(draft=draft, lang=lang)
                 missing = find_next_missing(draft)
                 if missing is None:
                     await show_confirmation(message, state, lang)
@@ -396,26 +365,6 @@ def get_public_router(
             return
         await update_draft(state, geo=code)
         await continue_flow(message, state, OrderStates.GEO, lang)
-
-    @router.message(OrderStates.TESTS)
-    async def tests_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.TESTS, lang)
-            return
-        if not text.isdigit():
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang, [["1", "3", "5"], ["10"]]))
-            return
-        tests = int(text)
-        if tests < 1 or tests > 100:
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang, [["1", "3", "5"], ["10"]]))
-            return
-        await update_draft(state, tests_count=tests)
-        await continue_flow(message, state, OrderStates.TESTS, lang)
 
     @router.message(OrderStates.METHOD)
     async def method_step(message: Message, state: FSMContext) -> None:
@@ -560,80 +509,45 @@ def get_public_router(
             await message.answer(TEXTS.get("confirmation.title", lang), reply_markup=confirmation_keyboard(lang))
             return
         draft = await get_draft(state)
-        tests = int(draft.get("tests_count") or 1)
-        surcharge = int(draft.get("payout_surcharge") or 0)
-        price_info = calculate_price(tests, surcharge)
-        total = price_info.total
+        price_total = await state.get_data()
+        total = price_total.get("price_eur") or calculate_price(int(draft.get("tests_count") or 1), int(draft.get("payout_surcharge") or 0)).total
         encrypted_login = encryptor.encrypt(draft.get("login"))
         encrypted_password = encryptor.encrypt(draft.get("password"))
-        payload_data = {
-            "source": draft.get("source", "tg"),
-            "geo": draft.get("geo", ""),
-            "tests_count": tests,
-            "method_user_text": draft.get("payment_method", ""),
-            "withdraw_required": bool(draft.get("withdraw_required")),
-            "custom_test_required": False,
-            "kyc_required": bool(draft.get("kyc_required")),
-            "site_url": draft.get("site_url"),
-            "comments": draft.get("comments"),
-            "price_eur": total,
-            "payment_network": "USDT TRC-20",
-            "payment_wallet": config.wallet_trc20,
-        }
-        create_payload = OrderCreate(
-            user_id=message.from_user.id,
-            username=message.from_user.username,
-            source=payload_data["source"],
-            geo=payload_data["geo"],
-            method_user_text=payload_data["method_user_text"],
-            tests_count=tests,
-            withdraw_required=bool(payload_data["withdraw_required"]),
-            custom_test_required=False,
-            custom_test_text=None,
-            kyc_required=bool(payload_data["kyc_required"]),
-            comments=payload_data["comments"],
-            site_url=payload_data["site_url"],
-            login=encrypted_login,
-            password_enc=encrypted_password,
-            price_eur=total,
-            status="awaiting_payment",
-            payment_network=payload_data["payment_network"],
-            payment_wallet=payload_data["payment_wallet"],
-            payload_hash=build_payload_hash(message.from_user.id, payload_data),
+        order_id = await repo.create_order(
+            OrderCreate(
+                user_id=message.from_user.id,
+                username=message.from_user.username,
+                source=draft.get("source", "tg"),
+                geo=draft.get("geo", ""),
+                method_user_text=draft.get("payment_method", ""),
+                tests_count=int(draft.get("tests_count") or 1),
+                withdraw_required=bool(draft.get("withdraw_required")),
+                custom_test_required=False,
+                custom_test_text=None,
+                kyc_required=bool(draft.get("kyc_required")),
+                comments=draft.get("comments"),
+                site_url=draft.get("site_url"),
+                login=encrypted_login,
+                password_enc=encrypted_password,
+                price_eur=total,
+                status="awaiting_payment",
+                payment_network="USDT TRC-20",
+                payment_wallet=config.wallet_trc20,
+            )
         )
-        result = await repo.create_order(create_payload)
-        await state.update_data(order_id=result.order_id, price_eur=total)
-        if result.created:
-            await message.answer(
-                TEXTS.get("confirmation.accepted", lang, order_id=result.order_id),
-                reply_markup=ReplyKeyboardRemove(),
-            )
-            await notify_admins(
-                message,
-                TEXTS.get(
-                    "admin.notify.new",
-                    lang,
-                    order_id=result.order_id,
-                    username=message.from_user.username or message.from_user.id,
-                    geo=format_country(draft.get("geo", "")),
-                    total=total,
-                ),
-            )
-            await show_payment(message, state, lang)
-            return
-        await message.answer(
+        await state.update_data(order_id=order_id)
+        await notify_admins(
+            message,
             TEXTS.get(
-                "confirmation.duplicate",
+                "admin.notify.new",
                 lang,
-                order_id=result.order_id,
-                status=result.status or "awaiting_payment",
+                order_id=order_id,
+                username=message.from_user.username or message.from_user.id,
+                geo=format_country(draft.get("geo", "")),
+                total=total,
             ),
-            reply_markup=ReplyKeyboardRemove(),
         )
-        if result.status in {"awaiting_payment", "proof_received"}:
-            await show_payment(message, state, lang)
-        else:
-            await state.clear()
+        await show_payment(message, state, lang)
 
     async def notify_admins(message: Message, text: str) -> None:
         if not config.admin_ids:
