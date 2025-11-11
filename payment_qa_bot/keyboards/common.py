@@ -43,8 +43,8 @@ def confirmation_keyboard(language: str) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [_button(TEXTS.button("confirmation.confirm", language))],
-            [_button(TEXTS.button("confirmation.edit", language))],
-            [_button(TEXTS.button("confirmation.cancel", language))],
+            [_button(TEXTS.button("confirmation.back", language))],
+            [_button(TEXTS.button("confirmation.add_order", language))],
         ],
         resize_keyboard=True,
     )

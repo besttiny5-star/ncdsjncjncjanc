@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    ReplyKeyboardRemove,
+)
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from payment_qa_bot.config import Config
 from payment_qa_bot.keyboards.common import (
@@ -14,30 +21,24 @@ from payment_qa_bot.keyboards.common import (
     confirmation_keyboard,
     payment_keyboard,
     skip_keyboard,
-    yes_no_keyboard,
 )
 from payment_qa_bot.keyboards.geo import geo_keyboard
 from payment_qa_bot.models.db import OrderCreate, OrdersRepository
 from payment_qa_bot.services.geo import format_country
 from payment_qa_bot.services.payload import PayloadData, PayloadParseResult, SignatureMismatchError, parse_payload
-from payment_qa_bot.services.pricing import calculate_price
-from payment_qa_bot.services.security import CredentialEncryptor, mask_secret
+from payment_qa_bot.services.pricing import calculate_price, format_eur
+from payment_qa_bot.services.security import CredentialEncryptor
 from payment_qa_bot.states.order import OrderStates
 from payment_qa_bot.texts.catalog import TEXTS
+from payment_qa_bot.services.methods import PaymentMethodInfo, get_payment_methods
+from payment_qa_bot.services.payout import PAYOUT_OPTIONS, PayoutOption, get_payout_option
 
 
 STATE_FLOW = [
     OrderStates.GEO,
     OrderStates.METHOD,
-    OrderStates.TESTS,
-    OrderStates.ADDONS_WITHDRAW,
-    OrderStates.ADDONS_CUSTOM,
-    OrderStates.ADDONS_CUSTOM_TEXT,
-    OrderStates.ADDONS_KYC,
+    OrderStates.PAYOUT,
     OrderStates.COMMENTS,
-    OrderStates.SITE_URL,
-    OrderStates.CREDS_LOGIN,
-    OrderStates.CREDS_PASS,
 ]
 
 
@@ -100,10 +101,6 @@ def get_public_router(
             return None
         idx = STATE_FLOW.index(current)
         for candidate in STATE_FLOW[idx + 1 :]:
-            if candidate == OrderStates.ADDONS_CUSTOM_TEXT and not draft.get("custom_test_required"):
-                continue
-            if candidate in (OrderStates.CREDS_LOGIN, OrderStates.CREDS_PASS) and draft.get("kyc_required"):
-                continue
             return candidate
         return None
 
@@ -112,10 +109,6 @@ def get_public_router(
             return None
         idx = STATE_FLOW.index(current)
         for candidate in reversed(STATE_FLOW[:idx]):
-            if candidate == OrderStates.ADDONS_CUSTOM_TEXT and not draft.get("custom_test_required"):
-                continue
-            if candidate in (OrderStates.CREDS_LOGIN, OrderStates.CREDS_PASS) and draft.get("kyc_required"):
-                continue
             return candidate
         return None
 
@@ -123,31 +116,139 @@ def get_public_router(
         checks = [
             (OrderStates.GEO, lambda d: bool(d.get("geo"))),
             (OrderStates.METHOD, lambda d: bool(d.get("payment_method"))),
-            (
-                OrderStates.TESTS,
-                lambda d: isinstance(d.get("tests_count"), int) and d.get("tests_count", 0) >= 1,
-            ),
-            (OrderStates.ADDONS_WITHDRAW, lambda d: "withdraw_required" in d),
-            (OrderStates.ADDONS_CUSTOM, lambda d: "custom_test_required" in d),
-            (
-                OrderStates.ADDONS_CUSTOM_TEXT,
-                lambda d: not d.get("custom_test_required") or bool(d.get("custom_test_text")),
-            ),
-            (OrderStates.ADDONS_KYC, lambda d: "kyc_required" in d),
-            (OrderStates.SITE_URL, lambda d: "site_url" in d),
-            (
-                OrderStates.CREDS_LOGIN,
-                lambda d: d.get("kyc_required") or "login" in d,
-            ),
-            (
-                OrderStates.CREDS_PASS,
-                lambda d: d.get("kyc_required") or "password" in d,
-            ),
+            (OrderStates.PAYOUT, lambda d: bool(d.get("payout_option_id"))),
+            (OrderStates.COMMENTS, lambda d: "comments" in d),
         ]
         for state, predicate in checks:
             if not predicate(draft):
                 return state
         return None
+
+    def build_method_keyboard(methods: List[PaymentMethodInfo], language: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        for idx, method in enumerate(methods):
+            label = method.name
+            if method.markup_eur:
+                label += f" (+{format_eur(method.markup_eur)})"
+            builder.button(text=label, callback_data=f"method:{idx}")
+        builder.adjust(1)
+        builder.row(
+            InlineKeyboardButton(
+                text=TEXTS.button("wizard.method.add_order", language),
+                callback_data="method:add",
+            )
+        )
+        return builder.as_markup()
+
+    def build_payout_keyboard(selected: Optional[str], language: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        for option in PAYOUT_OPTIONS:
+            marker = "✅" if option.option_id == selected else "⚪️"
+            builder.button(
+                text=f"{marker} {option.title(language)}",
+                callback_data=f"payout:{option.option_id}",
+            )
+        builder.adjust(1)
+        return builder.as_markup()
+
+    def build_post_confirm_keyboard(language: str) -> InlineKeyboardMarkup:
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text=TEXTS.button("confirmation.add_order", language),
+            callback_data="order:add_more",
+        )
+        builder.button(
+            text=TEXTS.button("confirmation.view_orders", language),
+            callback_data="order:view",
+        )
+        builder.button(
+            text=TEXTS.button("confirmation.done", language),
+            callback_data="order:done",
+        )
+        builder.adjust(1)
+        return builder.as_markup()
+
+    async def start_additional_order(message: Message, state: FSMContext, language: str) -> None:
+        data = await state.get_data()
+        draft = dict(data.get("draft", {}))
+        base_geo = draft.get("geo") or data.get("last_geo")
+        if not base_geo:
+            await state.set_state(OrderStates.GEO)
+            await ask_state(message, state, OrderStates.GEO, language)
+            return
+        source = draft.get("source", "tg")
+        await state.update_data(
+            draft={"source": source, "geo": base_geo},
+            method_options=[],
+            price_eur=None,
+        )
+        await set_mode(state, "wizard")
+        await state.set_state(OrderStates.METHOD)
+        await ask_state(message, state, OrderStates.METHOD, language)
+
+    async def send_order_created_message(message: Message, language: str) -> None:
+        await message.answer(
+            TEXTS.get("confirmation.success", language),
+            reply_markup=build_post_confirm_keyboard(language),
+        )
+
+    async def finalize_order_creation(message: Message, state: FSMContext, language: str) -> Optional[int]:
+        draft = await get_draft(state)
+        if not draft.get("geo") or not draft.get("payment_method") or not draft.get("payout_option_id"):
+            await message.answer(TEXTS.get("confirmation.missing", language), reply_markup=confirmation_keyboard(language))
+            return None
+        method_markup = int(draft.get("payment_method_markup") or 0)
+        payout_fee = int(draft.get("payout_fee_eur") or 0)
+        price = calculate_price(1, method_markup, payout_fee)
+        total = price.total
+        encrypted_login = encryptor.encrypt(draft.get("login"))
+        encrypted_password = encryptor.encrypt(draft.get("password"))
+        order_id = await repo.create_order(
+            OrderCreate(
+                user_id=message.from_user.id,
+                username=message.from_user.username,
+                source=draft.get("source", "tg"),
+                geo=draft.get("geo", ""),
+                method_user_text=draft.get("payment_method", ""),
+                tests_count=1,
+                withdraw_required=bool(draft.get("withdraw_required")),
+                custom_test_required=False,
+                custom_test_text=None,
+                kyc_required=bool(draft.get("kyc_required")),
+                comments=draft.get("comments"),
+                site_url=None,
+                login=encrypted_login,
+                password_enc=encrypted_password,
+                price_eur=total,
+                status="awaiting_payment",
+                payment_network="USDT TRC-20",
+                payment_wallet=config.wallet_trc20,
+            )
+        )
+        data = await state.get_data()
+        pending_orders = list(data.get("pending_order_ids") or [])
+        pending_orders.append(order_id)
+        await state.update_data(
+            order_id=order_id,
+            pending_order_ids=pending_orders,
+            last_geo=draft.get("geo"),
+            draft={"source": draft.get("source", "tg"), "geo": draft.get("geo")},
+            price_eur=total,
+        )
+        await state.set_state(OrderStates.CONFIRMED)
+        await notify_admins(
+            message,
+            TEXTS.get(
+                "admin.notify.new",
+                language,
+                order_id=order_id,
+                username=message.from_user.username or message.from_user.id,
+                geo=format_country(draft.get("geo", "")),
+                total=total,
+            ),
+        )
+        await send_order_created_message(message, language)
+        return order_id
 
     async def ask_state(message: Message, state: FSMContext, target: OrderStates, language: str) -> None:
         draft = await get_draft(state)
@@ -157,81 +258,68 @@ def get_public_router(
                 reply_markup=geo_keyboard(config.geo_whitelist, language),
             )
         elif target == OrderStates.METHOD:
-            geo_label = format_country(draft.get("geo", "")) if draft.get("geo") else ""
-            prompt = TEXTS.get("wizard.method", language)
-            if geo_label:
-                prompt += f"\n\n{geo_label}"
-            await message.answer(prompt, reply_markup=back_cancel_keyboard(language))
-        elif target == OrderStates.TESTS:
-            await message.answer(
-                TEXTS.get("wizard.tests", language),
-                reply_markup=back_cancel_keyboard(language),
+            geo_code = draft.get("geo")
+            if not geo_code:
+                await state.set_state(OrderStates.GEO)
+                await ask_state(message, state, OrderStates.GEO, language)
+                return
+            methods = get_payment_methods(geo_code)
+            if not methods:
+                await message.answer(
+                    TEXTS.get("wizard.method.unavailable", language),
+                    reply_markup=back_cancel_keyboard(language),
+                )
+                return
+            await state.update_data(
+                method_options=[{"name": option.name, "markup": option.markup_eur} for option in methods]
             )
-        elif target == OrderStates.ADDONS_WITHDRAW:
-            await message.answer(
-                TEXTS.get("wizard.withdraw", language),
-                reply_markup=yes_no_keyboard(language),
+            prompt = TEXTS.get(
+                "wizard.method",
+                language,
+                geo=format_country(geo_code),
             )
-        elif target == OrderStates.ADDONS_CUSTOM:
+            await message.answer(prompt, reply_markup=build_method_keyboard(methods, language))
+        elif target == OrderStates.PAYOUT:
+            selected = draft.get("payout_option_id")
+            description_lines = [TEXTS.get("wizard.payout.prompt", language)]
+            for option in PAYOUT_OPTIONS:
+                line = f"• {option.title(language)}"
+                details = option.description(language)
+                if details:
+                    line += f" — {details}"
+                description_lines.append(line)
             await message.answer(
-                TEXTS.get("wizard.custom", language),
-                reply_markup=yes_no_keyboard(language),
-            )
-        elif target == OrderStates.ADDONS_CUSTOM_TEXT:
-            await message.answer(
-                TEXTS.get("wizard.custom.text", language),
-                reply_markup=back_cancel_keyboard(language),
-            )
-        elif target == OrderStates.ADDONS_KYC:
-            await message.answer(
-                TEXTS.get("wizard.kyc", language),
-                reply_markup=yes_no_keyboard(language),
+                "\n".join(description_lines),
+                reply_markup=build_payout_keyboard(selected, language),
             )
         elif target == OrderStates.COMMENTS:
             await message.answer(
                 TEXTS.get("wizard.comments", language),
                 reply_markup=skip_keyboard(language),
             )
-        elif target == OrderStates.SITE_URL:
-            await message.answer(
-                TEXTS.get("wizard.site", language),
-                reply_markup=skip_keyboard(language),
-            )
-        elif target == OrderStates.CREDS_LOGIN:
-            await message.answer(
-                TEXTS.get("wizard.login", language),
-                reply_markup=skip_keyboard(language),
-            )
-        elif target == OrderStates.CREDS_PASS:
-            await message.answer(
-                TEXTS.get("wizard.password", language),
-                reply_markup=skip_keyboard(language),
-            )
 
     async def show_confirmation(message: Message, state: FSMContext, language: str) -> None:
         draft = await get_draft(state)
-        tests = draft.get("tests_count", 1)
-        kyc = bool(draft.get("kyc_required"))
-        price = calculate_price(tests, kyc)
+        method_markup = int(draft.get("payment_method_markup") or 0)
+        payout_fee = int(draft.get("payout_fee_eur") or 0)
+        price = calculate_price(1, method_markup, payout_fee)
+        payout_option = get_payout_option(draft.get("payout_option_id", ""))
+        payout_label = payout_option.title(language) if payout_option else "—"
         summary = TEXTS.get(
             "confirmation.body",
             language,
             geo=format_country(draft.get("geo", "—")),
-            tests=tests,
-            withdraw=TEXTS.get("wizard.yes", language)
-            if draft.get("withdraw_required")
-            else TEXTS.get("wizard.no", language),
-            custom=(
-                TEXTS.get("wizard.yes", language)
-                if draft.get("custom_test_required")
-                else TEXTS.get("wizard.no", language)
-            ),
-            kyc=TEXTS.get("wizard.yes", language) if kyc else TEXTS.get("wizard.no", language),
-            site=draft.get("site_url") or "—",
-            login=mask_secret(draft.get("login")),
             method=draft.get("payment_method") or "—",
+            payout=payout_label,
             comments=draft.get("comments") or "—",
-            total=price.total,
+            base_price=format_eur(price.base_total),
+            method_markup=format_eur(price.method_markup_total)
+            if price.method_markup_total
+            else format_eur(0),
+            payout_fee=format_eur(price.payout_total)
+            if price.payout_total
+            else format_eur(0),
+            total=format_eur(price.total),
         )
         await state.set_state(OrderStates.CONFIRM)
         await state.update_data(price_eur=price.total)
@@ -303,26 +391,22 @@ def get_public_router(
                 draft = {"source": "site"}
                 if parsed.data.geo:
                     draft["geo"] = parsed.data.geo
-                if parsed.data.tests_count is not None:
-                    draft["tests_count"] = parsed.data.tests_count
-                if parsed.data.withdraw_required is not None:
-                    draft["withdraw_required"] = parsed.data.withdraw_required
-                if parsed.data.custom_test_required is not None:
-                    draft["custom_test_required"] = parsed.data.custom_test_required
-                if parsed.data.custom_test_text:
-                    draft["custom_test_text"] = parsed.data.custom_test_text
-                if parsed.data.kyc_required is not None:
-                    draft["kyc_required"] = parsed.data.kyc_required
                 if parsed.data.payment_method:
                     draft["payment_method"] = parsed.data.payment_method
-                if parsed.data.site_url:
-                    draft["site_url"] = parsed.data.site_url
-                if parsed.data.login is not None:
-                    draft["login"] = parsed.data.login
-                if parsed.data.password is not None:
-                    draft["password"] = parsed.data.password
                 if parsed.data.comments is not None:
                     draft["comments"] = parsed.data.comments
+                payout_option_id: Optional[str] = None
+                if parsed.data.kyc_required:
+                    payout_option_id = "full_kyc"
+                elif parsed.data.withdraw_required:
+                    payout_option_id = "payout_check"
+                if payout_option_id:
+                    option = get_payout_option(payout_option_id)
+                    if option:
+                        draft["payout_option_id"] = option.option_id
+                        draft["payout_fee_eur"] = option.fee_eur
+                        draft["withdraw_required"] = option.withdraw_required
+                        draft["kyc_required"] = option.kyc_required
                 await state.update_data(draft=draft, lang=lang)
                 missing = find_next_missing(draft)
                 if missing is None:
@@ -397,115 +481,58 @@ def get_public_router(
         await update_draft(state, geo=code)
         await continue_flow(message, state, OrderStates.GEO, lang)
 
-    @router.message(OrderStates.METHOD)
-    async def method_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.METHOD, lang)
-            return
-        if len(text) < 2 or len(text) > 100:
-            await message.answer(TEXTS.get("wizard.invalid.method", lang), reply_markup=back_cancel_keyboard(lang))
-            return
-        await update_draft(state, payment_method=text)
-        await continue_flow(message, state, OrderStates.METHOD, lang)
-
-    @router.message(OrderStates.TESTS)
-    async def tests_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.TESTS, lang)
+    @router.callback_query(OrderStates.METHOD, F.data.startswith("method:"))
+    async def method_callback(query: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_language(state, query.from_user.id)
+        payload = (query.data or "").split("method:", maxsplit=1)[-1]
+        if payload == "add":
+            await query.answer()
+            if query.message:
+                await query.message.edit_reply_markup(reply_markup=None)
+                await start_additional_order(query.message, state, lang)
             return
         try:
-            value = int(text)
+            index = int(payload)
         except ValueError:
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang))
+            await query.answer(TEXTS.get("wizard.method.invalid_choice", lang), show_alert=True)
             return
-        if value < 1 or value > 100:
-            await message.answer(TEXTS.get("wizard.invalid.tests", lang), reply_markup=back_cancel_keyboard(lang))
+        data = await state.get_data()
+        options = data.get("method_options") or []
+        if index < 0 or index >= len(options):
+            await query.answer(TEXTS.get("wizard.method.invalid_choice", lang), show_alert=True)
             return
-        await update_draft(state, tests_count=value)
-        await continue_flow(message, state, OrderStates.TESTS, lang)
+        selected = options[index]
+        await update_draft(
+            state,
+            payment_method=selected.get("name"),
+            payment_method_markup=selected.get("markup", 0),
+        )
+        await query.answer(TEXTS.get("wizard.method.selected", lang))
+        if query.message:
+            await query.message.edit_reply_markup(reply_markup=None)
+            await continue_flow(query.message, state, OrderStates.METHOD, lang)
 
-    @router.message(OrderStates.ADDONS_WITHDRAW)
-    async def withdraw_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
+    @router.callback_query(OrderStates.PAYOUT, F.data.startswith("payout:"))
+    async def payout_callback(query: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_language(state, query.from_user.id)
+        payload = (query.data or "").split("payout:", maxsplit=1)[-1]
+        option = get_payout_option(payload)
+        if option is None:
+            await query.answer(TEXTS.get("wizard.payout.invalid_choice", lang), show_alert=True)
             return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.ADDONS_WITHDRAW, lang)
-            return
-        if is_button(text, "wizard.yes", lang):
-            await update_draft(state, withdraw_required=True)
-        elif is_button(text, "wizard.no", lang):
-            await update_draft(state, withdraw_required=False)
-        else:
-            await message.answer(TEXTS.get("wizard.withdraw", lang), reply_markup=yes_no_keyboard(lang))
-            return
-        await continue_flow(message, state, OrderStates.ADDONS_WITHDRAW, lang)
-
-    @router.message(OrderStates.ADDONS_CUSTOM)
-    async def custom_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.ADDONS_CUSTOM, lang)
-            return
-        if is_button(text, "wizard.yes", lang):
-            await update_draft(state, custom_test_required=True)
-        elif is_button(text, "wizard.no", lang):
-            await update_draft(state, custom_test_required=False, custom_test_text=None)
-        else:
-            await message.answer(TEXTS.get("wizard.custom", lang), reply_markup=yes_no_keyboard(lang))
-            return
-        await continue_flow(message, state, OrderStates.ADDONS_CUSTOM, lang)
-
-    @router.message(OrderStates.ADDONS_CUSTOM_TEXT)
-    async def custom_text_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.ADDONS_CUSTOM_TEXT, lang)
-            return
-        if not text:
-            await message.answer(TEXTS.get("wizard.missing.custom_text", lang), reply_markup=back_cancel_keyboard(lang))
-            return
-        await update_draft(state, custom_test_text=text)
-        await continue_flow(message, state, OrderStates.ADDONS_CUSTOM_TEXT, lang)
-
-    @router.message(OrderStates.ADDONS_KYC)
-    async def kyc_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.ADDONS_KYC, lang)
-            return
-        if is_button(text, "wizard.yes", lang):
-            await update_draft(state, kyc_required=True)
-        elif is_button(text, "wizard.no", lang):
-            await update_draft(state, kyc_required=False)
-        else:
-            await message.answer(TEXTS.get("wizard.kyc", lang), reply_markup=yes_no_keyboard(lang))
-            return
-        await continue_flow(message, state, OrderStates.ADDONS_KYC, lang)
+        await update_draft(
+            state,
+            payout_option_id=option.option_id,
+            payout_fee_eur=option.fee_eur,
+            withdraw_required=option.withdraw_required,
+            kyc_required=option.kyc_required,
+        )
+        await query.answer(TEXTS.get("wizard.payout.selected", lang))
+        if query.message:
+            await query.message.edit_reply_markup(
+                reply_markup=build_payout_keyboard(option.option_id, lang)
+            )
+            await continue_flow(query.message, state, OrderStates.PAYOUT, lang)
 
     @router.message(OrderStates.COMMENTS)
     async def comments_step(message: Message, state: FSMContext) -> None:
@@ -526,126 +553,64 @@ def get_public_router(
             await update_draft(state, comments=text)
         await continue_flow(message, state, OrderStates.COMMENTS, lang)
 
-    @router.message(OrderStates.SITE_URL)
-    async def site_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.SITE_URL, lang)
-            return
-        if is_button(text, "wizard.skip", lang):
-            await update_draft(state, site_url=None)
-        else:
-            if not (text.startswith("http://") or text.startswith("https://")):
-                await message.answer(TEXTS.get("wizard.invalid.url", lang), reply_markup=skip_keyboard(lang))
-                return
-            await update_draft(state, site_url=text)
-        await continue_flow(message, state, OrderStates.SITE_URL, lang)
-
-    @router.message(OrderStates.CREDS_LOGIN)
-    async def login_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        draft = await get_draft(state)
-        if draft.get("kyc_required"):
-            await continue_flow(message, state, OrderStates.CREDS_LOGIN, lang)
-            return
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.CREDS_LOGIN, lang)
-            return
-        if is_button(text, "wizard.skip", lang):
-            await update_draft(state, login=None)
-        else:
-            if len(text) < 2 or len(text) > 120:
-                await message.answer(TEXTS.get("wizard.invalid.login", lang), reply_markup=skip_keyboard(lang))
-                return
-            await update_draft(state, login=text)
-        await continue_flow(message, state, OrderStates.CREDS_LOGIN, lang)
-
-    @router.message(OrderStates.CREDS_PASS)
-    async def password_step(message: Message, state: FSMContext) -> None:
-        lang = await get_language(state, message.from_user.id)
-        draft = await get_draft(state)
-        if draft.get("kyc_required"):
-            await continue_flow(message, state, OrderStates.CREDS_PASS, lang)
-            return
-        text = (message.text or "").strip()
-        if is_button(text, "wizard.cancel", lang):
-            await cancel_flow(message, state, lang)
-            return
-        if is_button(text, "wizard.back", lang):
-            await handle_back(message, state, OrderStates.CREDS_PASS, lang)
-            return
-        if is_button(text, "wizard.skip", lang):
-            await update_draft(state, password=None)
-        else:
-            if len(text) < 2 or len(text) > 120:
-                await message.answer(TEXTS.get("wizard.invalid.password", lang), reply_markup=skip_keyboard(lang))
-                return
-            await update_draft(state, password=text)
-        await continue_flow(message, state, OrderStates.CREDS_PASS, lang)
-
     @router.message(OrderStates.CONFIRM)
     async def confirm_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
-        if is_button(text, "confirmation.cancel", lang) or is_button(text, "wizard.cancel", lang):
+        if is_button(text, "wizard.cancel", lang):
             await cancel_flow(message, state, lang)
             return
-        if is_button(text, "confirmation.edit", lang):
-            await set_mode(state, "wizard")
-            await state.set_state(OrderStates.GEO)
-            await ask_state(message, state, OrderStates.GEO, lang)
+        if is_button(text, "confirmation.back", lang):
+            await handle_back(message, state, OrderStates.CONFIRM, lang)
             return
-        if not is_button(text, "confirmation.confirm", lang):
-            await message.answer(TEXTS.get("confirmation.title", lang), reply_markup=confirmation_keyboard(lang))
+        if is_button(text, "confirmation.add_order", lang):
+            created = await finalize_order_creation(message, state, lang)
+            if created is not None:
+                await start_additional_order(message, state, lang)
             return
-        draft = await get_draft(state)
-        price_total = await state.get_data()
-        total = price_total.get("price_eur") or calculate_price(draft.get("tests_count", 1), bool(draft.get("kyc_required"))).total
-        encrypted_login = encryptor.encrypt(draft.get("login"))
-        encrypted_password = encryptor.encrypt(draft.get("password"))
-        order_id = await repo.create_order(
-            OrderCreate(
-                user_id=message.from_user.id,
-                username=message.from_user.username,
-                source=draft.get("source", "tg"),
-                geo=draft.get("geo", ""),
-                method_user_text=draft.get("payment_method", ""),
-                tests_count=draft.get("tests_count", 1),
-                withdraw_required=bool(draft.get("withdraw_required")),
-                custom_test_required=bool(draft.get("custom_test_required")),
-                custom_test_text=draft.get("custom_test_text"),
-                kyc_required=bool(draft.get("kyc_required")),
-                comments=draft.get("comments"),
-                site_url=draft.get("site_url"),
-                login=encrypted_login,
-                password_enc=encrypted_password,
-                price_eur=total,
-                status="awaiting_payment",
-                payment_network="USDT TRC-20",
-                payment_wallet=config.wallet_trc20,
-            )
-        )
-        await state.update_data(order_id=order_id)
-        await notify_admins(
-            message,
-            TEXTS.get(
-                "admin.notify.new",
-                lang,
-                order_id=order_id,
-                username=message.from_user.username or message.from_user.id,
-                geo=format_country(draft.get("geo", "")),
-                total=total,
-            ),
-        )
-        await show_payment(message, state, lang)
+        if is_button(text, "confirmation.confirm", lang):
+            await finalize_order_creation(message, state, lang)
+            return
+        await message.answer(TEXTS.get("confirmation.title", lang), reply_markup=confirmation_keyboard(lang))
+
+    @router.callback_query(F.data == "order:add_more")
+    async def order_add_more(query: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_language(state, query.from_user.id)
+        await query.answer()
+        if query.message:
+            await query.message.edit_reply_markup(reply_markup=None)
+            await start_additional_order(query.message, state, lang)
+
+    @router.callback_query(F.data == "order:view")
+    async def order_view(query: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_language(state, query.from_user.id)
+        orders = await repo.list_user_orders(query.from_user.id, limit=5)
+        if not orders:
+            text = TEXTS.get("status.none", lang)
+        else:
+            lines = [TEXTS.get("status.list.header", lang)]
+            for record in orders:
+                total = record.price_eur or 0
+                lines.append(
+                    TEXTS.get(
+                        "status.list.item",
+                        lang,
+                        order_id=record.order_id,
+                        status=record.status,
+                        total=total,
+                    )
+                )
+            text = "\n".join(lines)
+        await query.answer()
+        if query.message:
+            await query.message.answer(text)
+
+    @router.callback_query(F.data == "order:done")
+    async def order_done(query: CallbackQuery, state: FSMContext) -> None:
+        lang = await get_language(state, query.from_user.id)
+        await query.answer()
+        if query.message:
+            await show_payment(query.message, state, lang)
 
     async def notify_admins(message: Message, text: str) -> None:
         if not config.admin_ids:
@@ -703,7 +668,8 @@ def get_public_router(
     ) -> None:
         lang = await get_language(state, message.from_user.id)
         data = await state.get_data()
-        order_id = data.get("order_id")
+        pending_orders = list(data.get("pending_order_ids") or [])
+        order_id = pending_orders.pop() if pending_orders else data.get("order_id")
         if not order_id:
             await message.answer(TEXTS.get("payment.request.proof", lang))
             return
