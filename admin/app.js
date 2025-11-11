@@ -9,7 +9,8 @@ const STATUSES = {
 const PACKAGE_LABELS = {
   single: 'Single Test',
   mini: 'Mini Audit',
-  retainer: 'Retainer'
+  retainer: 'Retainer',
+  custom: 'Custom'
 };
 
 const STORAGE_KEYS = {
@@ -79,24 +80,47 @@ const CHART_COLORS = {
 
 const PACKAGE_COLORS = ['#d8b4fe', '#c084fc', '#a855f7'];
 
-function init() {
-  if (!window.PaymentQA_DATA) {
-    console.error('Не найдены данные PaymentQA_DATA');
-    return;
-  }
+async function hydrateData() {
+  const data = await window.PaymentQA.loadData();
+  window.PaymentQA_DATA = data;
 
-  state.orders = window.PaymentQA_DATA.orders.map((order) => ({
+  const orders = Array.isArray(data.orders) ? data.orders : [];
+  state.orders = orders.map((order) => ({
     ...order,
-    createdAt: new Date(order.createdAt),
+    createdAt: order.createdAt ? new Date(order.createdAt) : new Date(),
     paidAt: order.paidAt ? new Date(order.paidAt) : null,
     startedAt: order.startedAt ? new Date(order.startedAt) : null,
     completedAt: order.completedAt ? new Date(order.completedAt) : null
   }));
-  state.testers = window.PaymentQA_DATA.testers;
-  state.activity = window.PaymentQA_DATA.activity
-    .map((item) => ({ ...item, createdAt: new Date(item.createdAt) }))
+  state.testers = Array.isArray(data.testers) ? data.testers : [];
+  state.activity = (Array.isArray(data.activity) ? data.activity : [])
+    .map((item) => ({ ...item, createdAt: item.createdAt ? new Date(item.createdAt) : new Date() }))
     .sort((a, b) => b.createdAt - a.createdAt);
-  state.countries = window.PaymentQA_DATA.countries;
+  state.countries = data.countries || {};
+  state.lastSync = new Date();
+  updateLastSyncLabel();
+}
+
+function updateLastSyncLabel() {
+  const el = document.getElementById('last-sync');
+  if (!el || !state.lastSync) return;
+  const diffMinutes = Math.round((Date.now() - state.lastSync.getTime()) / 60000);
+  if (diffMinutes <= 0) {
+    el.textContent = 'только что';
+  } else {
+    el.textContent = durationFormatter.format(-diffMinutes, 'minute');
+  }
+}
+
+async function init() {
+  try {
+    await hydrateData();
+  } catch (error) {
+    console.error('Не удалось загрузить данные панели', error);
+    const grid = document.getElementById('metrics-grid');
+    if (grid) grid.innerHTML = '<p class="error">Не удалось загрузить данные. Попробуйте обновить страницу.</p>';
+    return;
+  }
 
   hydrateFilters();
   hydratePageSize();
@@ -107,10 +131,7 @@ function init() {
   attachEventListeners();
   renderAll();
 
-  setInterval(() => {
-    state.lastSync = new Date();
-    document.getElementById('last-sync').textContent = 'только что';
-  }, 30000);
+  setInterval(updateLastSyncLabel, 30000);
 }
 
 function hydrateFilters() {
@@ -142,10 +163,15 @@ function hydratePageSize() {
 }
 
 function attachEventListeners() {
-  document.getElementById('refresh-data').addEventListener('click', () => {
-    showToast('🔄', 'Данные обновлены');
-    state.lastSync = new Date();
-    renderAll();
+  document.getElementById('refresh-data').addEventListener('click', async () => {
+    try {
+      await hydrateData();
+      renderAll();
+      showToast('🔄', 'Данные обновлены');
+    } catch (error) {
+      console.error('Ошибка при обновлении данных', error);
+      showToast('⚠️', 'Не удалось обновить данные');
+    }
   });
 
   document.getElementById('export-dashboard').addEventListener('click', () => {
@@ -185,21 +211,27 @@ function attachEventListeners() {
     renderSelected();
   });
 
-  document.getElementById('bulk-status').addEventListener('change', (event) => {
+  document.getElementById('bulk-status').addEventListener('change', async (event) => {
     const newStatus = event.target.value;
     if (!newStatus) return;
-    state.selected.forEach((id) => {
+    const ids = [...state.selected];
+    if (!ids.length) return;
+    for (const id of ids) {
       const order = state.orders.find((item) => item.id === id);
-      if (order) {
-        order.status = newStatus;
-        const now = new Date();
-        if (newStatus === 'paid') order.paidAt = now;
-        if (newStatus === 'in_progress') order.startedAt = now;
-        if (newStatus === 'completed') order.completedAt = now;
-        if (newStatus === 'cancelled') order.cancelledAt = now;
+      if (!order) continue;
+      const now = new Date();
+      order.status = newStatus;
+      if (newStatus === 'paid') order.paidAt = now;
+      if (newStatus === 'in_progress') order.startedAt = now;
+      if (newStatus === 'completed') order.completedAt = now;
+      if (newStatus === 'cancelled') order.cancelledAt = now;
+      try {
+        await window.PaymentQA.updateOrderStatus(order.id, { status: newStatus });
+      } catch (error) {
+        console.error('Не удалось обновить статус заказа', error);
       }
-    });
-    showToast('✅', 'Статусы обновлены для выбранных заказов (демо).');
+    }
+    showToast('✅', `Статусы обновлены для ${ids.length} заказов.`);
     renderAll();
     event.target.value = '';
   });

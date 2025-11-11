@@ -6,6 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 class OrderStates(StatesGroup):
     GEO = State()
     METHOD = State()
+    TESTS = State()
     PAYOUT = State()
     COMMENTS = State()
     SITE_URL = State()
