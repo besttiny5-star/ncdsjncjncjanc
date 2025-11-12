@@ -251,6 +251,18 @@
       background: rgba(124, 58, 237, 0.12);
     }
 
+    .btn.outline {
+      background: transparent;
+      border: 1px solid rgba(124, 58, 237, 0.4);
+      color: var(--accent-strong);
+      box-shadow: none;
+    }
+
+    .btn.outline:hover {
+      background: rgba(124, 58, 237, 0.12);
+      border-color: rgba(124, 58, 237, 0.55);
+    }
+
     .btn[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
@@ -322,6 +334,7 @@
     input[type="number"],
     input[type="text"],
     input[type="url"],
+    input[type="email"],
     textarea {
       width: 100%;
       padding: 12px 14px;
@@ -336,6 +349,7 @@
     input[type="number"]:focus,
     input[type="text"]:focus,
     input[type="url"]:focus,
+    input[type="email"]:focus,
     textarea:focus {
       outline: 2px solid rgba(124, 58, 237, 0.4);
       border-color: rgba(124, 58, 237, 0.45);
@@ -382,6 +396,17 @@
       gap: 14px;
     }
 
+    .calc-actions {
+      display: grid;
+      gap: 12px;
+    }
+
+    @media (min-width: 768px) {
+      .calc-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     .calc-total {
       font-size: clamp(34px, 5vw, 46px);
       font-weight: 700;
@@ -391,6 +416,19 @@
       color: var(--muted);
       font-size: 14px;
       min-height: 20px;
+    }
+
+    .calc-order-feedback {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .calc-order-feedback[data-state="success"] {
+      color: #34d399;
+    }
+
+    .calc-order-feedback[data-state="error"] {
+      color: #f87171;
     }
 
     .calculator-extra {
@@ -879,7 +917,15 @@
               <div>Итог</div>
               <div id="calcTotal" class="calc-total">€85</div>
               <div id="calcNote" class="calc-note"></div>
-              <a id="calcCta" class="btn" href="#">Отправить в Telegram — €85</a>
+              <div class="calc-field">
+                <label for="calcEmail">Email для связи *</label>
+                <input id="calcEmail" type="email" placeholder="you@example.com" autocomplete="email" required />
+              </div>
+              <div class="calc-actions">
+                <a id="calcCta" class="btn" href="#">Отправить в Telegram — €85</a>
+                <button type="button" id="calcOrderBtn" class="btn outline">Оформить на сайте</button>
+              </div>
+              <p id="calcOrderFeedback" class="calc-order-feedback" hidden></p>
               <a class="btn secondary" data-telegram-link href="https://t.me/PaymentQA_bot?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
             </aside>
           </div>
@@ -1016,6 +1062,10 @@
     const totalEl = document.getElementById('calcTotal');
     const noteEl = document.getElementById('calcNote');
     const ctaEl = document.getElementById('calcCta');
+    const calcEmailInput = document.getElementById('calcEmail');
+    const calcOrderBtn = document.getElementById('calcOrderBtn');
+    const calcOrderFeedback = document.getElementById('calcOrderFeedback');
+    let latestCalculation = null;
 
     function populateMethods(geo) {
       const methods = PAYMENT_METHODS[geo] || [];
@@ -1079,28 +1129,63 @@
       const payout = PAYOUTS[payoutRadio.value] || PAYOUTS.N;
       const geo = countrySelect.value;
       const method = methodSelect.value || '';
+      const siteValue = siteInput.value.trim();
+      const loginValue = loginInput.value.trim();
+      const passwordValue = passwordInput.value.trim();
+      const commentsValue = commentsInput.value.trim();
       const total = tests * BASE_PRICE + payout.surcharge;
+      const roundedTotal = Math.round(total);
       const formatted = currencyFormat.format(total);
       totalEl.textContent = formatted;
       noteEl.textContent = [method, `${tests} тест(ов)`, payout.label].filter(Boolean).join(' · ');
 
+      const payload = buildPayload({
+        geo,
+        tests,
+        payoutCode: payoutRadio.value,
+        method,
+        site: siteValue,
+        login: loginValue,
+        password: passwordValue,
+        comments: commentsValue,
+        total: roundedTotal
+      });
+
       if (ctaEl) {
         ctaEl.textContent = `Отправить в Telegram — ${formatted}`;
-        const payload = buildPayload({
-          geo,
-          tests,
-          payoutCode: payoutRadio.value,
-          method,
-          site: siteInput.value.trim(),
-          login: loginInput.value.trim(),
-          password: passwordInput.value.trim(),
-          comments: commentsInput.value.trim(),
-          total: Math.round(total)
-        });
         ctaEl.dataset.payload = payload;
         ctaEl.dataset.geo = geo;
         ctaEl.dataset.tests = String(tests);
-        ctaEl.dataset.total = String(Math.round(total));
+        ctaEl.dataset.total = String(roundedTotal);
+        ctaEl.dataset.payout = payoutRadio.value;
+        ctaEl.dataset.method = method;
+      }
+
+      latestCalculation = {
+        payload,
+        geo,
+        method,
+        tests,
+        payoutCode: payoutRadio.value,
+        payoutSurcharge: payout.surcharge,
+        withdrawRequired: payoutRadio.value !== 'N',
+        kycRequired: payoutRadio.value === 'K',
+        site: siteValue,
+        login: loginValue,
+        password: passwordValue,
+        comments: commentsValue,
+        total: roundedTotal
+      };
+
+      if (calcOrderBtn) {
+        calcOrderBtn.textContent = `Оформить на сайте — ${formatted}`;
+        calcOrderBtn.dataset.total = String(roundedTotal);
+      }
+
+      if (calcOrderFeedback && !calcOrderFeedback.hidden) {
+        calcOrderFeedback.hidden = true;
+        calcOrderFeedback.textContent = '';
+        delete calcOrderFeedback.dataset.state;
       }
     }
 
@@ -1209,6 +1294,16 @@
     const DEFAULT_START_PAYLOAD = 'start';
     const TELEGRAM_START_LIMIT = 64;
     const PAYLOAD_ENDPOINT = '/api/payloads';
+    const SITE_ORDER_ENDPOINT = '/api/site-orders';
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+    const SITE_ORDER_ERROR_MESSAGES = {
+      invalid_email: 'Укажите корректный email, чтобы мы могли связаться с вами.',
+      invalid_geo: 'Выберите страну тестирования.',
+      invalid_tests: 'Количество тестов должно быть от 1 до 25.',
+      invalid_payout: 'Выберите вариант выплаты.',
+      invalid_total: 'Сумма заказа не совпадает. Обновите страницу и попробуйте снова.',
+      invalid_json: 'Не удалось отправить заказ. Обновите страницу и попробуйте снова.'
+    };
     const payloadMemo = new Map();
     let latestPayload = DEFAULT_START_PAYLOAD;
     const geoSelect = document.getElementById('calcCountry');
@@ -1234,6 +1329,23 @@
       if (typeof payload === 'string' && payload.length) {
         latestPayload = payload;
         updateTelegramLinks();
+      }
+    };
+
+    const setCalcOrderFeedback = (state, message) => {
+      if (!calcOrderFeedback) return;
+      if (!message) {
+        calcOrderFeedback.hidden = true;
+        calcOrderFeedback.textContent = '';
+        delete calcOrderFeedback.dataset.state;
+        return;
+      }
+      calcOrderFeedback.hidden = false;
+      calcOrderFeedback.textContent = message;
+      if (state) {
+        calcOrderFeedback.dataset.state = state;
+      } else {
+        delete calcOrderFeedback.dataset.state;
       }
     };
 
@@ -1319,6 +1431,85 @@
           const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
           const resolved = await resolvePayload(payload);
           openTelegram(resolved, true);
+        }
+      });
+    }
+
+    if (calcOrderBtn) {
+      calcOrderBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (typeof calculateTotal === 'function') {
+          calculateTotal();
+        }
+        const calculation = latestCalculation;
+        const email = calcEmailInput ? calcEmailInput.value.trim() : '';
+        if (!EMAIL_REGEX.test(email)) {
+          setCalcOrderFeedback('error', 'Укажите корректный email, чтобы мы могли связаться с вами.');
+          if (calcEmailInput) {
+            calcEmailInput.focus();
+          }
+          return;
+        }
+        if (!calculation) {
+          setCalcOrderFeedback('error', 'Не удалось собрать данные заказа. Обновите страницу и попробуйте снова.');
+          return;
+        }
+
+        const payloadBody = {
+          email,
+          geo: calculation.geo,
+          tests: calculation.tests,
+          payoutCode: calculation.payoutCode,
+          paymentMethod: calculation.method || null,
+          payoutSurcharge: calculation.payoutSurcharge,
+          siteUrl: calculation.site || null,
+          login: calculation.login || null,
+          password: calculation.password || null,
+          comments: calculation.comments || null,
+          total: calculation.total,
+          payload: calculation.payload
+        };
+
+        const originalText = calcOrderBtn.textContent;
+        setCalcOrderFeedback(null, '');
+        calcOrderBtn.disabled = true;
+        calcOrderBtn.textContent = 'Отправляем…';
+
+        try {
+          const response = await fetch(SITE_ORDER_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadBody)
+          });
+          if (!response.ok) {
+            const errorText = (await response.text()).trim();
+            const friendly = SITE_ORDER_ERROR_MESSAGES[errorText] || 'Не удалось отправить заказ. Попробуйте ещё раз.';
+            throw new Error(friendly);
+          }
+          const data = await response.json().catch(() => ({}));
+          const orderId = data && data.orderId;
+          const successMessage = data && data.message
+            ? data.message
+            : orderId
+              ? `Заказ #${orderId} отправлен. Мы свяжемся с вами по email.`
+              : 'Спасибо! Мы приняли заказ и свяжемся по email.';
+          setCalcOrderFeedback('success', successMessage);
+          if (calcEmailInput) {
+            calcEmailInput.value = '';
+          }
+          if (calculation && calculation.payload) {
+            resolvePayload(calculation.payload)
+              .then(resolved => setLatestPayload(resolved))
+              .catch(() => {});
+          }
+        } catch (error) {
+          const message = error instanceof Error && error.message
+            ? error.message
+            : 'Не удалось отправить заказ. Попробуйте ещё раз.';
+          setCalcOrderFeedback('error', message);
+        } finally {
+          calcOrderBtn.disabled = false;
+          calcOrderBtn.textContent = originalText;
         }
       });
     }

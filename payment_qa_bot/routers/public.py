@@ -321,14 +321,10 @@ def get_public_router(
                     draft["payment_method"] = parsed.data.payment_method
                 if parsed.data.price_total is not None:
                     draft["price_eur"] = parsed.data.price_total
-                if parsed.data.site_url:
-                    draft["site_url"] = parsed.data.site_url
-                if parsed.data.login is not None:
-                    draft["login"] = parsed.data.login
-                if parsed.data.password is not None:
-                    draft["password"] = parsed.data.password
-                if parsed.data.comments is not None:
-                    draft["comments"] = parsed.data.comments
+                draft["site_url"] = parsed.data.site_url if parsed.data.site_url is not None else None
+                draft["login"] = parsed.data.login if parsed.data.login is not None else None
+                draft["password"] = parsed.data.password if parsed.data.password is not None else None
+                draft["comments"] = parsed.data.comments if parsed.data.comments is not None else None
                 payout_key = None
                 if parsed.data.kyc_required:
                     payout_key = "payout.option.kyc"

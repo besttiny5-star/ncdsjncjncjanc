@@ -30,7 +30,7 @@ async def main() -> None:
     encryptor = CredentialEncryptor(config.encryption_key)
     bot = Bot(token=config.bot_token, parse_mode="HTML")
     dp = build_dispatcher(repo, encryptor, config)
-    api_app = create_api_app(repo, encryptor)
+    api_app = create_api_app(repo, encryptor, config)
     runner = web.AppRunner(api_app)
     await runner.setup()
     site = web.TCPSite(runner, host=config.api_host, port=config.api_port)
