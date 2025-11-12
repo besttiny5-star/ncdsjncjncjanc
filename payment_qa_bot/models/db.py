@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
 import aiosqlite
@@ -118,8 +118,18 @@ class OrdersRepository:
                 )
                 """
             )
+            await db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS payload_cache (
+                    token TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
             await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_payload_cache_created_at ON payload_cache(created_at)")
             await self._ensure_columns(db)
             await db.commit()
 
@@ -222,6 +232,49 @@ class OrdersRepository:
             )
             rows = await cursor.fetchall()
         return {row["status"]: row["cnt"] for row in rows}
+
+    async def save_payload_reference(self, token: str, payload: str) -> None:
+        now = datetime.utcnow().isoformat(timespec="seconds")
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO payload_cache(token, payload, created_at)
+                VALUES(?, ?, ?)
+                ON CONFLICT(token) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at
+                """,
+                (token, payload, now),
+            )
+            await db.commit()
+
+    async def get_payload_reference(self, token: str) -> Optional[str]:
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT payload FROM payload_cache WHERE token = ? LIMIT 1",
+                (token,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return row["payload"]
+
+    async def delete_payload_reference(self, token: str) -> None:
+        async with aiosqlite.connect(self._db_path) as db:
+            await db.execute(
+                "DELETE FROM payload_cache WHERE token = ?",
+                (token,),
+            )
+            await db.commit()
+
+    async def cleanup_payload_references(self, max_age_hours: int = 72) -> int:
+        cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+        async with aiosqlite.connect(self._db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM payload_cache WHERE created_at < ?",
+                (cutoff.isoformat(timespec="seconds"),),
+            )
+            await db.commit()
+            return cursor.rowcount
 
     async def find_by_payload_hash(self, user_id: int, payload_hash: str) -> Optional[OrderRecord]:
         async with aiosqlite.connect(self._db_path) as db:

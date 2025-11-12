@@ -348,6 +348,7 @@
     }
 
     input[type="number"] {
+      appearance: textfield;
       -moz-appearance: textfield;
     }
 
@@ -781,7 +782,7 @@
         <p>Работаем с iGaming, подписками, сервисами и финтехом. Все кейсы выполняют локальные операторы на реальных устройствах.</p>
         <div class="hero-actions">
           <a class="btn" id="heroStartBtn" href="#">Начать тест</a>
-          <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
+          <a class="btn secondary" data-telegram-link href="https://t.me/PaymentQA_bot?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
         </div>
       </div>
     </section>
@@ -813,7 +814,7 @@
           <div class="enterprise">
             <h3>Нужны кастомные сценарии или SLA?</h3>
             <p>Подготовим план тестирования под ваш продукт, соберём выделенную команду и договоримся о таймлайне.</p>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Связаться с командой</a>
+            <a class="btn secondary" data-telegram-link href="https://t.me/PaymentQA_bot" target="_blank" rel="noopener">Связаться с командой</a>
           </div>
         </div>
       </div>
@@ -879,13 +880,13 @@
               <div id="calcTotal" class="calc-total">€85</div>
               <div id="calcNote" class="calc-note"></div>
               <a id="calcCta" class="btn" href="#">Отправить в Telegram — €85</a>
-              <a class="btn secondary" href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
+              <a class="btn secondary" data-telegram-link href="https://t.me/PaymentQA_bot?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
             </aside>
           </div>
           <div class="calculator-extra">
             <p>Нету нужного гео? Напишите нам, скорее всего мы его покроем!</p>
             <div class="calculator-contacts">
-              <a data-telegram-link href="https://t.me/your_bot_here" target="_blank" rel="noopener">Telegram</a>
+              <a data-telegram-link href="https://t.me/PaymentQA_bot" target="_blank" rel="noopener">Telegram</a>
               <a href="mailto:hello@example.com">hello@example.com</a>
             </div>
           </div>
@@ -930,7 +931,7 @@
             </ul>
           </div>
           <div class="cta-details">
-            <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
+            <div class="pill">Telegram: <strong class="telegram-handle">@PaymentQA_bot</strong></div>
             <div class="pill">Email: <strong>hello@example.com</strong></div>
             <div class="pill">SLA ответа · в течение рабочего дня</div>
             <form class="cta-form" id="contactForm">
@@ -945,7 +946,7 @@
               <button class="btn" id="contactStartBtn" type="submit">Начать тест</button>
               <p class="cta-feedback" id="contactFeedback" role="status" hidden></p>
             </form>
-            <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
+            <a class="btn secondary" data-telegram-link href="https://t.me/PaymentQA_bot?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
           </div>
         </div>
       </div>
@@ -1204,12 +1205,24 @@
 
   <script>
     // Telegram Bot integration
-    const BOT_USERNAME = 'your_bot_here'; // Замените на реальное имя бота
+    const BOT_USERNAME = 'PaymentQA_bot'; // Замените на реальное имя бота
+    const DEFAULT_START_PAYLOAD = 'start';
+    const TELEGRAM_START_LIMIT = 64;
+    const PAYLOAD_ENDPOINT = '/api/payloads';
+    const payloadMemo = new Map();
+    let latestPayload = DEFAULT_START_PAYLOAD;
     const geoSelect = document.getElementById('calcCountry');
 
+    const buildTelegramLink = (payload) =>
+      `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
+
     const updateTelegramLinks = () => {
+      const fallbackPayload = latestPayload || DEFAULT_START_PAYLOAD;
       document.querySelectorAll('[data-telegram-link]').forEach(link => {
-        link.href = `https://t.me/${BOT_USERNAME}?start=start`;
+        const linkPayload = link.dataset.payload && link.dataset.payload.length
+          ? link.dataset.payload
+          : fallbackPayload;
+        link.href = buildTelegramLink(linkPayload);
       });
 
       document.querySelectorAll('.telegram-handle').forEach(el => {
@@ -1217,46 +1230,95 @@
       });
     };
 
-    const openTelegram = (payload) => {
-      const deeplink = `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(payload)}`;
+    const setLatestPayload = (payload) => {
+      if (typeof payload === 'string' && payload.length) {
+        latestPayload = payload;
+        updateTelegramLinks();
+      }
+    };
+
+    const resolvePayload = async (payload) => {
+      const value = typeof payload === 'string' && payload.length ? payload : DEFAULT_START_PAYLOAD;
+      if (!value || value.length <= TELEGRAM_START_LIMIT) {
+        return value || DEFAULT_START_PAYLOAD;
+      }
+      if (payloadMemo.has(value)) {
+        return payloadMemo.get(value);
+      }
+      try {
+        const response = await fetch(PAYLOAD_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payload: value })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.token) {
+            const resolved = `calc_ref_${data.token}`;
+            payloadMemo.set(value, resolved);
+            return resolved;
+          }
+        }
+      } catch (error) {
+        console.warn('Не удалось сохранить параметры для Telegram-перехода', error);
+      }
+      const fallback = value.length > TELEGRAM_START_LIMIT ? DEFAULT_START_PAYLOAD : value;
+      payloadMemo.set(value, fallback);
+      return fallback;
+    };
+
+    const openTelegram = (payload, persist = false) => {
+      const finalPayload = typeof payload === 'string' && payload.length
+        ? payload
+        : latestPayload || DEFAULT_START_PAYLOAD;
+
+      if (persist) {
+        setLatestPayload(finalPayload);
+      }
+
+      const deeplink = buildTelegramLink(finalPayload);
       window.open(deeplink, '_blank');
     };
 
     updateTelegramLinks();
 
     document.querySelectorAll('.order-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         e.preventDefault();
 
         const packageType = btn.dataset.package;
         const geo = geoSelect ? geoSelect.value : 'IN';
 
-        openTelegram(`pkg_${packageType}_geo_${geo}`);
+        const rawPayload = `pkg_${packageType}_geo_${geo}`;
+        const resolved = await resolvePayload(rawPayload);
+        openTelegram(resolved, true);
       });
     });
 
     const calculatorBtn = document.getElementById('calcCta');
     if (calculatorBtn) {
-      calculatorBtn.addEventListener('click', (e) => {
+      calculatorBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         if (!calculatorBtn.dataset.payload && typeof calculateTotal === 'function') {
           calculateTotal();
         }
         const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
         const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
-        openTelegram(payload);
+        const resolved = await resolvePayload(payload);
+        openTelegram(resolved, true);
       });
     }
 
     const heroStartBtn = document.getElementById('heroStartBtn');
     if (heroStartBtn) {
-      heroStartBtn.addEventListener('click', (event) => {
+      heroStartBtn.addEventListener('click', async (event) => {
         event.preventDefault();
         if (calculatorBtn && typeof calculateTotal === 'function') {
           calculateTotal();
           const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
           const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
-          openTelegram(payload);
+          const resolved = await resolvePayload(payload);
+          openTelegram(resolved, true);
         }
       });
     }
@@ -1268,7 +1330,7 @@
     const contactFeedback = document.getElementById('contactFeedback');
 
     if (contactForm && contactStartBtn) {
-      contactForm.addEventListener('submit', (event) => {
+      contactForm.addEventListener('submit', async (event) => {
         event.preventDefault();
 
         const telegramRaw = contactTelegramInput ? contactTelegramInput.value.trim() : '';
@@ -1297,7 +1359,8 @@
         const payload = `contact_${payloadParts.join('_')}`;
 
         try {
-          openTelegram(payload);
+          const resolved = await resolvePayload(payload);
+          openTelegram(resolved, true);
           if (contactFeedback) {
             contactFeedback.hidden = false;
             contactFeedback.dataset.state = 'success';

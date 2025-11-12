@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import secrets
 from typing import Any, Dict
 
 from aiohttp import web
 
 from payment_qa_bot.models.db import OrderRecord, OrdersRepository
 from payment_qa_bot.services.security import CredentialEncryptor
+
+PAYLOAD_MAX_LENGTH = 4096
+PAYLOAD_CLEANUP_HOURS = 72
+
+
+def _generate_payload_token() -> str:
+    return secrets.token_urlsafe(9)
 
 
 def _payout_label(order: OrderRecord) -> str:
@@ -90,6 +98,28 @@ def create_api_app(repo: OrdersRepository, encryptor: CredentialEncryptor) -> we
         counts = await repo.get_stats()
         return web.json_response({"stats": counts})
 
+    async def create_payload(request: web.Request) -> web.Response:
+        try:
+            body: Dict[str, Any] = await request.json()
+        except Exception as exc:  # noqa: BLE001
+            raise web.HTTPBadRequest(text=str(exc))
+
+        payload = (body.get("payload") or "").strip()
+        if not payload:
+            raise web.HTTPBadRequest(text="payload_required")
+        if len(payload) > PAYLOAD_MAX_LENGTH:
+            raise web.HTTPBadRequest(text="payload_too_large")
+
+        token = (body.get("token") or "").strip()
+        if not token:
+            token = _generate_payload_token()
+        if len(token) > 128:
+            raise web.HTTPBadRequest(text="token_too_long")
+
+        await repo.save_payload_reference(token, payload)
+        await repo.cleanup_payload_references(PAYLOAD_CLEANUP_HOURS)
+        return web.json_response({"token": token})
+
     async def cors_middleware(app: web.Application, handler):  # type: ignore[override]
         async def middleware_handler(request: web.Request) -> web.Response:
             if request.method == "OPTIONS":
@@ -100,7 +130,7 @@ def create_api_app(repo: OrdersRepository, encryptor: CredentialEncryptor) -> we
                 {
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Allow-Methods": "GET, PATCH, OPTIONS",
+                    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
                 }
             )
             return response
@@ -111,7 +141,9 @@ def create_api_app(repo: OrdersRepository, encryptor: CredentialEncryptor) -> we
     app.router.add_get("/api/orders", list_orders)
     app.router.add_get("/api/orders/{order_id}", get_order)
     app.router.add_patch("/api/orders/{order_id}", update_order)
+    app.router.add_post("/api/payloads", create_payload)
     app.router.add_options("/api/orders/{order_id}", lambda _: web.Response(status=204))
+    app.router.add_options("/api/payloads", lambda _: web.Response(status=204))
     app.router.add_get("/api/stats", stats)
     app.router.add_options("/api/orders", lambda _: web.Response(status=204))
     app.router.add_options("/api/stats", lambda _: web.Response(status=204))

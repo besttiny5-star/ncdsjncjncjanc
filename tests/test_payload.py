@@ -21,6 +21,13 @@ class PayloadParsingTests(unittest.TestCase):
         self.assertIsNone(result.data.tests_count)
         self.assertTrue(result.data.withdraw_required)
 
+    def test_reference_payload_reports_token(self):
+        result = parse_payload("calc_ref_abcd1234")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.data.reference_token, "abcd1234")
+        self.assertEqual(result.error, "payload_reference")
+
 
 if __name__ == "__main__":
     unittest.main()

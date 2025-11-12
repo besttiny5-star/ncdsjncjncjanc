@@ -22,6 +22,7 @@ CALC_V1_PATTERN = re.compile(
     r"(?:_price(?P<price>\d+))?"
     r"(?:_sign<(?P<sign>[^>]+)>)?$"
 )
+REF_PATTERN = re.compile(r"^calc_ref_(?P<token>[A-Za-z0-9_-]{4,128})$")
 
 OPTION_MAP: Dict[str, str] = {
     "w": "withdraw_required",
@@ -49,6 +50,7 @@ class PayloadData:
     comments: Optional[str] = None
     package_type: Optional[str] = None
     price_total: Optional[int] = None
+    reference_token: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -85,6 +87,10 @@ def _decode_segment(value: Optional[str]) -> Optional[str]:
 
 def parse_payload(payload: str, secret: Optional[bytes] = None) -> PayloadParseResult:
     payload = payload.strip()
+    ref_match = REF_PATTERN.match(payload)
+    if ref_match:
+        data = PayloadData(source="site", reference_token=ref_match.group("token"))
+        return PayloadParseResult(ok=False, data=data, error="payload_reference")
     pkg_match = PKG_PATTERN.match(payload)
     if pkg_match:
         data = PayloadData(source="site")

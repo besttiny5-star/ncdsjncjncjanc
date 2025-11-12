@@ -293,10 +293,22 @@ def get_public_router(
         lang = await get_language(state, message.from_user.id)
         payload_value = (command.args or "").strip() if command else ""
         if payload_value:
+            reference_token = None
             try:
                 parsed: PayloadParseResult = parse_payload(payload_value, config.payload_secret)
             except SignatureMismatchError:
                 parsed = PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="invalid_signature")
+            if not parsed.ok and parsed.data.reference_token:
+                reference_token = parsed.data.reference_token
+                stored_payload = await repo.get_payload_reference(reference_token)
+                if stored_payload:
+                    payload_value = stored_payload
+                    try:
+                        parsed = parse_payload(payload_value, config.payload_secret)
+                    except SignatureMismatchError:
+                        parsed = PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="invalid_signature")
+                else:
+                    parsed = PayloadParseResult(ok=False, data=PayloadData(source="tg"), error="reference_not_found")
             if parsed.ok:
                 await set_mode(state, "site")
                 payload_hash = compute_payload_hash(payload_value)
