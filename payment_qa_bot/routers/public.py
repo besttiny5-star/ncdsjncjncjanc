@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Dict, List, Optional
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.filters.command import CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message, ReplyKeyboardRemove
+from aiogram.types import ChatMemberUpdated, Message, ReplyKeyboardRemove
 
 from payment_qa_bot.config import Config
 from payment_qa_bot.keyboards.common import (
@@ -48,12 +48,21 @@ PAYOUT_OPTIONS = [
 ]
 
 
+GROUP_REDIRECT_TEXT = "Пожалуйста, напишите боту в личные сообщения, чтобы оформить заказ."
+
+
 def get_public_router(
     config: Config,
     repo: OrdersRepository,
     encryptor: CredentialEncryptor,
 ) -> Router:
     router = Router()
+    group_router = Router(name="public-groups")
+    group_router.message.filter(F.chat.type != "private")
+    private_router = Router(name="public-private")
+    private_router.message.filter(F.chat.type == "private")
+    router.include_router(group_router)
+    router.include_router(private_router)
 
     async def get_language(state: FSMContext, user_id: int) -> str:
         data = await state.get_data()
@@ -257,32 +266,28 @@ def get_public_router(
     def compute_payload_hash(raw: str) -> str:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    async def build_private_button(bot) -> InlineKeyboardMarkup:
+    async def build_private_message(bot: Bot) -> str:
         me = await bot.get_me()
         username = me.username or ""
-        url = f"https://t.me/{username}?start=start" if username else "https://t.me/"
-        text = TEXTS.get("group.button", config.default_language)
-        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=text, url=url)]])
+        if username:
+            return f"{GROUP_REDIRECT_TEXT} https://t.me/{username}"
+        return GROUP_REDIRECT_TEXT
 
-    @router.my_chat_member()
+    @group_router.my_chat_member()
     async def on_added_to_group(event: ChatMemberUpdated) -> None:
         if event.chat.type == "private":
             return
         if not (event.new_chat_member.is_member() or event.new_chat_member.is_administrator()):
             return
-        keyboard = await build_private_button(event.bot)
-        await event.bot.send_message(
-            event.chat.id,
-            TEXTS.get("group.restriction", config.default_language),
-            reply_markup=keyboard,
-        )
+        text = await build_private_message(event.bot)
+        await event.bot.send_message(event.chat.id, text, disable_web_page_preview=True)
 
-    @router.message(~F.chat.type == "private")
+    @group_router.message()
     async def ignore_groups(message: Message) -> None:
-        keyboard = await build_private_button(message.bot)
-        await message.answer(TEXTS.get("group.restriction", config.default_language), reply_markup=keyboard)
+        text = await build_private_message(message.bot)
+        await message.answer(text, disable_web_page_preview=True)
 
-    @router.message(CommandStart())
+    @private_router.message(CommandStart())
     async def start(message: Message, state: FSMContext, command: CommandObject) -> None:
         await state.clear()
         lang = await get_language(state, message.from_user.id)
@@ -374,17 +379,17 @@ def get_public_router(
         await state.set_state(OrderStates.GEO)
         await ask_state(message, state, OrderStates.GEO, lang)
 
-    @router.message(Command("help"))
+    @private_router.message(Command("help"))
     async def help_command(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         await message.answer(TEXTS.get("help.text", lang))
 
-    @router.message(Command("cancel"))
+    @private_router.message(Command("cancel"))
     async def cancel_command(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         await cancel_flow(message, state, lang)
 
-    @router.message(Command("lang"))
+    @private_router.message(Command("lang"))
     async def language_command(message: Message, state: FSMContext) -> None:
         current = await get_language(state, message.from_user.id)
         new_lang = "ru" if current == "en" else "en"
@@ -392,7 +397,7 @@ def get_public_router(
         await message.answer(TEXTS.get("lang.updated", new_lang))
         await message.answer(TEXTS.get("lang.prompt", new_lang))
 
-    @router.message(Command("status"))
+    @private_router.message(Command("status"))
     async def status_command(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         order = await repo.get_last_order(message.from_user.id)
@@ -410,7 +415,7 @@ def get_public_router(
             )
         )
 
-    @router.message(OrderStates.GEO)
+    @private_router.message(OrderStates.GEO)
     async def geo_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -427,7 +432,7 @@ def get_public_router(
         await update_draft(state, geo=code)
         await continue_flow(message, state, OrderStates.GEO, lang)
 
-    @router.message(OrderStates.METHOD)
+    @private_router.message(OrderStates.METHOD)
     async def method_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -450,7 +455,7 @@ def get_public_router(
         await update_draft(state, payment_method=text)
         await continue_flow(message, state, OrderStates.METHOD, lang)
 
-    @router.message(OrderStates.TESTS)
+    @private_router.message(OrderStates.TESTS)
     async def tests_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -473,7 +478,7 @@ def get_public_router(
         await state.update_data(price_eur=total)
         await continue_flow(message, state, OrderStates.TESTS, lang)
 
-    @router.message(OrderStates.PAYOUT)
+    @private_router.message(OrderStates.PAYOUT)
     async def payout_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -503,7 +508,7 @@ def get_public_router(
         await state.update_data(price_eur=calculate_price(tests, option["surcharge"]).total)
         await continue_flow(message, state, OrderStates.PAYOUT, lang)
 
-    @router.message(OrderStates.COMMENTS)
+    @private_router.message(OrderStates.COMMENTS)
     async def comments_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -522,7 +527,7 @@ def get_public_router(
             await update_draft(state, comments=text)
         await continue_flow(message, state, OrderStates.COMMENTS, lang)
 
-    @router.message(OrderStates.SITE_URL)
+    @private_router.message(OrderStates.SITE_URL)
     async def site_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -541,7 +546,7 @@ def get_public_router(
             await update_draft(state, site_url=text)
         await continue_flow(message, state, OrderStates.SITE_URL, lang)
 
-    @router.message(OrderStates.CREDS_LOGIN)
+    @private_router.message(OrderStates.CREDS_LOGIN)
     async def login_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -560,7 +565,7 @@ def get_public_router(
             await update_draft(state, login=text)
         await continue_flow(message, state, OrderStates.CREDS_LOGIN, lang)
 
-    @router.message(OrderStates.CREDS_PASS)
+    @private_router.message(OrderStates.CREDS_PASS)
     async def password_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -579,7 +584,7 @@ def get_public_router(
             await update_draft(state, password=text)
         await continue_flow(message, state, OrderStates.CREDS_PASS, lang)
 
-    @router.message(OrderStates.CONFIRM)
+    @private_router.message(OrderStates.CONFIRM)
     async def confirm_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -636,7 +641,7 @@ def get_public_router(
         )
         await state.update_data(order_id=order_id)
         await notify_admins(
-            message,
+            message.bot,
             TEXTS.get(
                 "admin.notify.new",
                 lang,
@@ -652,16 +657,16 @@ def get_public_router(
         )
         await show_payment(message, state, lang)
 
-    async def notify_admins(message: Message, text: str) -> None:
+    async def notify_admins(bot: Bot, text: str) -> None:
         if not config.admin_ids:
             return
         for admin_id in config.admin_ids:
             try:
-                await message.bot.send_message(admin_id, text)
+                await bot.send_message(admin_id, text)
             except Exception:  # noqa: BLE001 - notification errors should not break user flow
                 continue
 
-    @router.message(OrderStates.PAYMENT)
+    @private_router.message(OrderStates.PAYMENT)
     async def payment_step(message: Message, state: FSMContext) -> None:
         lang = await get_language(state, message.from_user.id)
         text = (message.text or "").strip()
@@ -680,15 +685,15 @@ def get_public_router(
             return
         await message.answer(TEXTS.get("payment.instructions", lang, wallet=config.wallet_trc20 or "—"), reply_markup=payment_keyboard(lang))
 
-    @router.message(OrderStates.CHECK_UPLOAD, F.photo)
+    @private_router.message(OrderStates.CHECK_UPLOAD, F.photo)
     async def payment_photo(message: Message, state: FSMContext) -> None:
         await handle_payment_proof(message, state, file_id=message.photo[-1].file_id, txid=None)
 
-    @router.message(OrderStates.CHECK_UPLOAD, F.document)
+    @private_router.message(OrderStates.CHECK_UPLOAD, F.document)
     async def payment_document(message: Message, state: FSMContext) -> None:
         await handle_payment_proof(message, state, file_id=message.document.file_id, txid=None)
 
-    @router.message(OrderStates.CHECK_UPLOAD, F.text)
+    @private_router.message(OrderStates.CHECK_UPLOAD, F.text)
     async def payment_txid(message: Message, state: FSMContext) -> None:
         text = (message.text or "").strip()
         lang = await get_language(state, message.from_user.id)
@@ -720,7 +725,7 @@ def get_public_router(
         if txid:
             update_fields["payment_txid"] = txid
         await repo.update_order(order_id, **update_fields)
-        await notify_admins(message, TEXTS.get("admin.notify.payment", lang, order_id=order_id))
+        await notify_admins(message.bot, TEXTS.get("admin.notify.payment", lang, order_id=order_id))
         await message.answer(TEXTS.get("payment.thanks", lang), reply_markup=ReplyKeyboardRemove())
         await state.clear()
 
