@@ -1293,8 +1293,8 @@
     const BOT_USERNAME = 'PaymentQA_bot'; // Замените на реальное имя бота
     const DEFAULT_START_PAYLOAD = 'start';
     const TELEGRAM_START_LIMIT = 64;
-    const PAYLOAD_ENDPOINT = '/api/payloads';
-    const SITE_ORDER_ENDPOINT = '/api/site-orders';
+    const PAYLOAD_ENDPOINT = 'http://127.0.0.1:8081/api/payloads';
+    const SITE_ORDER_ENDPOINT = 'http://127.0.0.1:8081/api/site-orders';
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
     const SITE_ORDER_ERROR_MESSAGES = {
       invalid_email: 'Укажите корректный email, чтобы мы могли связаться с вами.',
