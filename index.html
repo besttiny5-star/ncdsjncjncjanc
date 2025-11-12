@@ -251,6 +251,19 @@
       background: rgba(124, 58, 237, 0.12);
     }
 
+    .btn[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn[disabled]:hover {
+      background: var(--accent);
+      box-shadow: none;
+      transform: none;
+    }
+
     .enterprise {
       margin-top: 40px;
       padding: 20px;
@@ -511,7 +524,7 @@
 
     .cta-details {
       display: grid;
-      gap: 12px;
+      gap: 16px;
     }
 
     .cta-details .pill {
@@ -523,6 +536,52 @@
       border: 1px solid rgba(148, 163, 184, 0.24);
       color: var(--muted);
       font-size: 14px;
+    }
+
+    .cta-form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .cta-input {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .cta-input label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .cta-input input {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text);
+      font-size: 14px;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .cta-input input:focus {
+      outline: none;
+      border-color: rgba(124, 58, 237, 0.6);
+      background: rgba(12, 20, 38, 0.9);
+    }
+
+    .cta-feedback {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .cta-feedback[data-state="success"] {
+      color: var(--success);
+    }
+
+    .cta-feedback[data-state="error"] {
+      color: #f87171;
     }
 
     .modules header {
@@ -873,8 +932,19 @@
           <div class="cta-details">
             <div class="pill">Telegram: <strong class="telegram-handle">@your_bot_here</strong></div>
             <div class="pill">Email: <strong>hello@example.com</strong></div>
-            <div class="pill">SLA ответа · 4 часа</div>
-            <a class="btn" id="contactStartBtn" href="#">Начать тест</a>
+            <div class="pill">SLA ответа · в течение рабочего дня</div>
+            <form class="cta-form" id="contactForm">
+              <div class="cta-input">
+                <label for="contactTelegram">Telegram</label>
+                <input id="contactTelegram" name="telegram" type="text" placeholder="@username" autocomplete="off" />
+              </div>
+              <div class="cta-input">
+                <label for="contactEmail">Email</label>
+                <input id="contactEmail" name="email" type="email" placeholder="you@example.com" autocomplete="email" />
+              </div>
+              <button class="btn" id="contactStartBtn" type="submit">Начать тест</button>
+              <p class="cta-feedback" id="contactFeedback" role="status" hidden></p>
+            </form>
             <a class="btn secondary" data-telegram-link href="https://t.me/your_bot_here?start=start" target="_blank" rel="noopener">Написать в Telegram</a>
           </div>
         </div>
@@ -1068,21 +1138,17 @@
       africa: {
         title: 'Африка & MENA',
         methods: [
-          { name: 'M‑Pesa', country: 'Кения', type: 'Mobile Money' },
           { name: 'Fawry', country: 'Египет', type: 'Cash Network' },
-          { name: 'MTN Mobile Money', country: 'Гана / Уганда', type: 'Mobile Money' },
           { name: 'Orange Money', country: "Кот-д'Ивуар", type: 'Mobile Money' },
-          { name: 'Paymob', country: 'MENA', type: 'Card acquiring' }
+          { name: 'Coris Money', country: 'Буркина-Фасо', type: 'Payment method' },
+          { name: 'Ozow', country: 'ЮАР', type: 'Instant EFT' }
         ]
       },
       latam: {
         title: 'LatAm',
         methods: [
-          { name: 'PIX', country: 'Бразилия', type: 'Instant Pay' },
-          { name: 'SPEI', country: 'Мексика', type: 'Bank transfer' },
-          { name: 'PSE', country: 'Колумбия', type: 'Bank transfer' },
           { name: 'Pago Fácil', country: 'Аргентина', type: 'Cash Network' },
-          { name: 'Boleto Bancário', country: 'Бразилия', type: 'Voucher' }
+          { name: 'Mach', country: 'Чили', type: 'Payment method' }
         ]
       },
       cis: {
@@ -1090,8 +1156,7 @@
         methods: [
           { name: 'Kaspi / Halyk', country: 'Казахстан', type: 'Bank transfer' },
           { name: 'Payme / Apelsin', country: 'Узбекистан', type: 'Wallet' },
-          { name: 'Idram', country: 'Армения', type: 'Wallet' },
-          { name: 'ePay', country: 'Казахстан', type: 'Card acquiring' }
+          { name: 'Portmanat', country: 'Азербайджан', type: 'Payment method' }
         ]
       }
     };
@@ -1112,7 +1177,6 @@
             <span class="module-tag">${method.country}</span>
             <span class="module-tag">${method.type}</span>
           </div>
-          <p>Тестируем успешные и негативные сценарии, снимаем видео, готовим чек-листы и фиксацию статусов.</p>
         `;
         modulesGrid.appendChild(card);
       });
@@ -1184,19 +1248,73 @@
       });
     }
 
-    [document.getElementById('heroStartBtn'), document.getElementById('contactStartBtn')]
-      .filter(Boolean)
-      .forEach((btn) => {
-        btn.addEventListener('click', (event) => {
-          event.preventDefault();
-          if (calculatorBtn && typeof calculateTotal === 'function') {
-            calculateTotal();
-            const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
-            const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
-            openTelegram(payload);
-          }
-        });
+    const heroStartBtn = document.getElementById('heroStartBtn');
+    if (heroStartBtn) {
+      heroStartBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (calculatorBtn && typeof calculateTotal === 'function') {
+          calculateTotal();
+          const fallbackGeo = geoSelect ? geoSelect.value : 'IN';
+          const payload = calculatorBtn.dataset.payload || `calc_v1_geo${fallbackGeo}_tests1_payoutN_price${BASE_PRICE}`;
+          openTelegram(payload);
+        }
       });
+    }
+
+    const contactForm = document.getElementById('contactForm');
+    const contactStartBtn = document.getElementById('contactStartBtn');
+    const contactTelegramInput = document.getElementById('contactTelegram');
+    const contactEmailInput = document.getElementById('contactEmail');
+    const contactFeedback = document.getElementById('contactFeedback');
+
+    if (contactForm && contactStartBtn) {
+      contactForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+
+        const telegramRaw = contactTelegramInput ? contactTelegramInput.value.trim() : '';
+        const telegramHandle = telegramRaw.replace(/^@+/, '');
+        const emailValue = contactEmailInput ? contactEmailInput.value.trim() : '';
+
+        if (!telegramHandle && !emailValue) {
+          if (contactFeedback) {
+            contactFeedback.hidden = false;
+            contactFeedback.dataset.state = 'error';
+            contactFeedback.textContent = 'Укажите Telegram или Email, чтобы мы могли связаться с вами.';
+          }
+          return;
+        }
+
+        contactStartBtn.disabled = true;
+
+        const payloadParts = [];
+        if (telegramHandle) {
+          payloadParts.push(`tg_${telegramHandle}`);
+        }
+        if (emailValue) {
+          payloadParts.push(`email_${emailValue}`);
+        }
+
+        const payload = `contact_${payloadParts.join('_')}`;
+
+        try {
+          openTelegram(payload);
+          if (contactFeedback) {
+            contactFeedback.hidden = false;
+            contactFeedback.dataset.state = 'success';
+            contactFeedback.textContent = 'Спасибо! Мы свяжемся с вами в течение рабочего дня.';
+          }
+          contactForm.reset();
+        } catch (error) {
+          if (contactFeedback) {
+            contactFeedback.hidden = false;
+            contactFeedback.dataset.state = 'error';
+            contactFeedback.textContent = 'Не удалось отправить данные. Попробуйте ещё раз или напишите в Telegram.';
+          }
+        } finally {
+          contactStartBtn.disabled = false;
+        }
+      });
+    }
   </script>
 </body>
 </html>
