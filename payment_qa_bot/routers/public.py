@@ -93,6 +93,61 @@ def get_public_router(
         data = await state.get_data()
         return dict(data.get("draft", {}))
 
+    async def ensure_order_id(message: Message, state: FSMContext) -> int:
+        data = await state.get_data()
+        if data.get("order_id"):
+            return int(data["order_id"])
+        draft = await get_draft(state)
+        payout_option = draft.get("payout_option") or "payout.option.none"
+        withdraw_required = bool(draft.get("withdraw_required"))
+        kyc_required = bool(draft.get("kyc_required"))
+        if payout_option == "payout.option.withdraw":
+            withdraw_required = True
+        if payout_option == "payout.option.kyc":
+            withdraw_required = True
+            kyc_required = True
+        payload = OrderCreate(
+            source=draft.get("source", "tg"),
+            state="draft",
+            start_token=repo.generate_start_token(),
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            geo=draft.get("geo"),
+            method_user_text=draft.get("payment_method"),
+            tests_count=draft.get("tests_count"),
+            withdraw_required=withdraw_required,
+            custom_test_required=False,
+            custom_test_text=None,
+            kyc_required=kyc_required,
+            comments=draft.get("comments"),
+            site_url=draft.get("site_url"),
+            login=encryptor.encrypt(draft.get("login")) if draft.get("login") else None,
+            password_enc=encryptor.encrypt(draft.get("password")) if draft.get("password") else None,
+            payout_surcharge=int(draft.get("payout_surcharge") or 0),
+            price_eur=data.get("price_eur"),
+            status="draft",
+            payment_network=None,
+            payment_wallet=None,
+            payload_hash=draft.get("payload_hash"),
+            tg_user_id=message.from_user.id,
+            email=None,
+        )
+        record = await repo.upsert_draft_order(
+            payload, match_email=None, match_tg_user_id=message.from_user.id
+        )
+        await state.update_data(order_id=record.order_id, start_token=record.start_token)
+        return record.order_id
+
+    async def persist_order(message: Message, state: FSMContext, updates: Dict[str, Any]) -> None:
+        order_id = await ensure_order_id(message, state)
+        record = await repo.update_from_telegram(
+            order_id,
+            tg_user_id=message.from_user.id,
+            **updates,
+        )
+        if record:
+            await state.update_data(order_id=record.order_id, start_token=record.start_token)
+
     async def set_mode(state: FSMContext, mode: str) -> None:
         await state.update_data(mode=mode)
 
@@ -107,7 +162,7 @@ def get_public_router(
         data = await state.get_data()
         order_id = data.get("order_id")
         if order_id:
-            await repo.update_order(order_id, status="cancelled")
+            await repo.update_order(order_id, status="cancelled", state="cancelled")
         await state.clear()
         await message.answer(TEXTS.get("confirmation.cancelled", language), reply_markup=ReplyKeyboardRemove())
 
@@ -266,6 +321,31 @@ def get_public_router(
     def compute_payload_hash(raw: str) -> str:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+    def payout_key_from_flags(withdraw_required: bool, kyc_required: bool) -> str:
+        if kyc_required:
+            return "payout.option.kyc"
+        if withdraw_required:
+            return "payout.option.withdraw"
+        return "payout.option.none"
+
+    def record_to_draft(record) -> Dict[str, Any]:
+        payout_key = payout_key_from_flags(record.withdraw_required, record.kyc_required)
+        return {
+            "source": record.source,
+            "geo": record.geo,
+            "payment_method": record.method_user_text,
+            "tests_count": record.tests_count,
+            "payout_option": payout_key,
+            "payout_surcharge": record.payout_surcharge,
+            "withdraw_required": record.withdraw_required,
+            "kyc_required": record.kyc_required,
+            "comments": record.comments,
+            "site_url": record.site_url,
+            "login": encryptor.decrypt(record.login),
+            "password": encryptor.decrypt(record.password_enc),
+            "payload_hash": record.payload_hash,
+        }
+
     async def build_private_message(bot: Bot) -> str:
         me = await bot.get_me()
         username = me.username or ""
@@ -292,6 +372,33 @@ def get_public_router(
         await state.clear()
         lang = await get_language(state, message.from_user.id)
         payload_value = (command.args or "").strip() if command else ""
+        if payload_value.startswith("ord_"):
+            token = payload_value.replace("ord_", "", 1)
+            record = await repo.get_by_start_token(token)
+            if record is None or record.state == "cancelled":
+                await message.answer(TEXTS.get("start.site.invalid", lang), reply_markup=ReplyKeyboardRemove())
+                return
+            if record.state == "submitted":
+                await message.answer(
+                    TEXTS.get("order.accepted", lang, order_id=record.order_id, total=record.price_eur or 0)
+                )
+                return
+            draft = record_to_draft(record)
+            await state.update_data(
+                draft=draft,
+                lang=lang,
+                order_id=record.order_id,
+                price_eur=record.price_eur,
+                start_token=record.start_token,
+            )
+            await set_mode(state, "site" if record.source == "web" else "wizard")
+            missing = find_next_missing(draft)
+            if missing is None:
+                await show_confirmation(message, state, lang)
+            else:
+                await state.set_state(missing)
+                await ask_state(message, state, missing, lang)
+            return
         if payload_value:
             reference_token = None
             try:
@@ -438,6 +545,7 @@ def get_public_router(
             await message.answer(TEXTS.get("wizard.invalid.geo", lang), reply_markup=geo_keyboard(config.geo_whitelist, lang))
             return
         await update_draft(state, geo=code)
+        await persist_order(message, state, {"geo": code})
         await continue_flow(message, state, OrderStates.GEO, lang)
 
     @private_router.message(OrderStates.METHOD)
@@ -461,6 +569,7 @@ def get_public_router(
                 await message.answer(TEXTS.get("wizard.invalid.method", lang), reply_markup=back_cancel_keyboard(lang))
                 return
         await update_draft(state, payment_method=text)
+        await persist_order(message, state, {"method_user_text": text})
         await continue_flow(message, state, OrderStates.METHOD, lang)
 
     @private_router.message(OrderStates.TESTS)
@@ -484,6 +593,7 @@ def get_public_router(
         surcharge = int(draft.get("payout_surcharge") or 0)
         total = calculate_price(value, surcharge).total
         await state.update_data(price_eur=total)
+        await persist_order(message, state, {"tests_count": value})
         await continue_flow(message, state, OrderStates.TESTS, lang)
 
     @private_router.message(OrderStates.PAYOUT)
@@ -514,6 +624,15 @@ def get_public_router(
         )
         tests = int(draft.get("tests_count") or 1)
         await state.update_data(price_eur=calculate_price(tests, option["surcharge"]).total)
+        await persist_order(
+            message,
+            state,
+            {
+                "withdraw_required": option["withdraw"],
+                "kyc_required": option["kyc"],
+                "payout_surcharge": option["surcharge"],
+            },
+        )
         await continue_flow(message, state, OrderStates.PAYOUT, lang)
 
     @private_router.message(OrderStates.COMMENTS)
@@ -527,12 +646,15 @@ def get_public_router(
             await handle_back(message, state, OrderStates.COMMENTS, lang)
             return
         if is_button(text, "wizard.skip", lang):
+            comment_value = None
             await update_draft(state, comments=None)
         else:
             if len(text) > 1000:
                 await message.answer(TEXTS.get("wizard.invalid.comment", lang), reply_markup=skip_keyboard(lang))
                 return
+            comment_value = text
             await update_draft(state, comments=text)
+        await persist_order(message, state, {"comments": comment_value})
         await continue_flow(message, state, OrderStates.COMMENTS, lang)
 
     @private_router.message(OrderStates.SITE_URL)
@@ -547,11 +669,13 @@ def get_public_router(
             return
         if is_button(text, "wizard.skip", lang):
             await update_draft(state, site_url=None)
+            await persist_order(message, state, {"site_url": None})
         else:
             if not (text.startswith("http://") or text.startswith("https://")):
                 await message.answer(TEXTS.get("wizard.invalid.url", lang), reply_markup=skip_keyboard(lang))
                 return
             await update_draft(state, site_url=text)
+            await persist_order(message, state, {"site_url": text})
         await continue_flow(message, state, OrderStates.SITE_URL, lang)
 
     @private_router.message(OrderStates.CREDS_LOGIN)
@@ -566,11 +690,17 @@ def get_public_router(
             return
         if is_button(text, "wizard.skip", lang):
             await update_draft(state, login=None)
+            await persist_order(message, state, {"login": None})
         else:
             if len(text) < 2 or len(text) > 120:
                 await message.answer(TEXTS.get("wizard.invalid.login", lang), reply_markup=skip_keyboard(lang))
                 return
             await update_draft(state, login=text)
+            await persist_order(
+                message,
+                state,
+                {"login": encryptor.encrypt(text)},
+            )
         await continue_flow(message, state, OrderStates.CREDS_LOGIN, lang)
 
     @private_router.message(OrderStates.CREDS_PASS)
@@ -585,11 +715,17 @@ def get_public_router(
             return
         if is_button(text, "wizard.skip", lang):
             await update_draft(state, password=None)
+            await persist_order(message, state, {"password_enc": None})
         else:
             if len(text) < 2 or len(text) > 120:
                 await message.answer(TEXTS.get("wizard.invalid.password", lang), reply_markup=skip_keyboard(lang))
                 return
             await update_draft(state, password=text)
+            await persist_order(
+                message,
+                state,
+                {"password_enc": encryptor.encrypt(text)},
+            )
         await continue_flow(message, state, OrderStates.CREDS_PASS, lang)
 
     @private_router.message(OrderStates.CONFIRM)
@@ -611,42 +747,34 @@ def get_public_router(
         price_total = await state.get_data()
         total = price_total.get("price_eur") or calculate_price(int(draft.get("tests_count") or 1), int(draft.get("payout_surcharge") or 0)).total
         payload_hash = draft.get("payload_hash")
-        if payload_hash:
-            existing = await repo.find_by_payload_hash(message.from_user.id, payload_hash)
-            if existing:
-                await state.update_data(order_id=existing.order_id)
-                await message.answer(
-                    TEXTS.get("order.duplicate", lang, order_id=existing.order_id, total=existing.price_eur or total),
-                    reply_markup=payment_keyboard(lang),
-                )
-                await show_payment(message, state, lang)
-                return
-        encrypted_login = encryptor.encrypt(draft.get("login"))
-        encrypted_password = encryptor.encrypt(draft.get("password"))
-        order_id = await repo.create_order(
-            OrderCreate(
-                user_id=message.from_user.id,
-                username=message.from_user.username,
-                source=draft.get("source", "tg"),
-                geo=draft.get("geo", ""),
-                method_user_text=draft.get("payment_method", ""),
-                tests_count=int(draft.get("tests_count") or 1),
-                withdraw_required=bool(draft.get("withdraw_required")),
-                custom_test_required=False,
-                custom_test_text=None,
-                kyc_required=bool(draft.get("kyc_required")),
-                comments=draft.get("comments"),
-                site_url=draft.get("site_url"),
-                login=encrypted_login,
-                password_enc=encrypted_password,
-                payout_surcharge=int(draft.get("payout_surcharge") or 0),
-                price_eur=total,
-                status="awaiting_payment",
-                payment_network="USDT TRC-20",
-                payment_wallet=config.wallet_trc20,
-                payload_hash=payload_hash,
-            )
+        order_id = await ensure_order_id(message, state)
+        updates = {
+            "price_eur": total,
+            "payload_hash": payload_hash,
+            "withdraw_required": bool(draft.get("withdraw_required")),
+            "kyc_required": bool(draft.get("kyc_required")),
+            "payout_surcharge": int(draft.get("payout_surcharge") or 0),
+        }
+        if draft.get("geo"):
+            updates["geo"] = draft.get("geo")
+        if draft.get("payment_method"):
+            updates["method_user_text"] = draft.get("payment_method")
+        if draft.get("tests_count"):
+            updates["tests_count"] = int(draft.get("tests_count"))
+        if draft.get("comments") is not None:
+            updates["comments"] = draft.get("comments")
+        if draft.get("site_url") is not None:
+            updates["site_url"] = draft.get("site_url")
+        if draft.get("login") is not None:
+            updates["login"] = encryptor.encrypt(draft.get("login"))
+        if draft.get("password") is not None:
+            updates["password_enc"] = encryptor.encrypt(draft.get("password"))
+        await repo.update_from_telegram(
+            order_id,
+            tg_user_id=message.from_user.id,
+            **updates,
         )
+        record = await repo.submit_order(order_id, price_eur=total)
         await state.update_data(order_id=order_id)
         await notify_admins(
             message.bot,
@@ -663,7 +791,10 @@ def get_public_router(
             TEXTS.get("order.accepted", lang, order_id=order_id, total=total),
             reply_markup=ReplyKeyboardRemove(),
         )
-        await show_payment(message, state, lang)
+        if record and record.state != "submitted":
+            await show_payment(message, state, lang)
+        else:
+            await state.clear()
 
     async def notify_admins(bot: Bot, text: str) -> None:
         if not config.admin_ids:
@@ -727,6 +858,7 @@ def get_public_router(
             return
         update_fields: Dict[str, Any] = {
             "status": "proof_received",
+            "state": "proof_received",
         }
         if file_id:
             update_fields["payment_proof_file_id"] = file_id

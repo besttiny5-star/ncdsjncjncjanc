@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import aiosqlite
 
@@ -15,6 +16,8 @@ class OrderRecord:
     user_id: int
     username: Optional[str]
     source: str
+    state: str
+    start_token: Optional[str]
     geo: Optional[str]
     method_user_text: Optional[str]
     tests_count: Optional[int]
@@ -35,32 +38,38 @@ class OrderRecord:
     payment_proof_file_id: Optional[str]
     admin_notes: Optional[str]
     payload_hash: Optional[str]
+    tg_user_id: Optional[int]
+    email: Optional[str]
     created_at: str
     updated_at: str
 
 
 @dataclass(slots=True)
 class OrderCreate:
+    source: str
+    state: str
+    start_token: str
     user_id: int
     username: Optional[str]
-    source: str
-    geo: str
-    method_user_text: str
-    tests_count: int
-    withdraw_required: bool
-    custom_test_required: bool
+    geo: Optional[str]
+    method_user_text: Optional[str]
+    tests_count: Optional[int]
+    withdraw_required: Optional[bool]
+    custom_test_required: Optional[bool]
     custom_test_text: Optional[str]
-    kyc_required: bool
+    kyc_required: Optional[bool]
     comments: Optional[str]
     site_url: Optional[str]
     login: Optional[str]
     password_enc: Optional[str]
-    payout_surcharge: int
-    price_eur: int
+    payout_surcharge: Optional[int]
+    price_eur: Optional[int]
     status: str
-    payment_network: str
-    payment_wallet: str
+    payment_network: Optional[str]
+    payment_wallet: Optional[str]
     payload_hash: Optional[str]
+    tg_user_id: Optional[int]
+    email: Optional[str]
 
 
 @dataclass(slots=True)
@@ -85,6 +94,8 @@ class OrdersRepository:
                     user_id INTEGER NOT NULL,
                     username TEXT,
                     source TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    start_token TEXT,
                     geo TEXT,
                     method_user_text TEXT,
                     tests_count INTEGER,
@@ -105,6 +116,8 @@ class OrdersRepository:
                     payment_proof_file_id TEXT,
                     admin_notes TEXT,
                     payload_hash TEXT,
+                    tg_user_id INTEGER,
+                    email TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
@@ -141,15 +154,35 @@ class OrdersRepository:
             alter_statements.append("ALTER TABLE orders ADD COLUMN payout_surcharge INTEGER DEFAULT 0")
         if "payload_hash" not in columns:
             alter_statements.append("ALTER TABLE orders ADD COLUMN payload_hash TEXT")
+        if "state" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN state TEXT DEFAULT 'draft'")
+        if "start_token" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN start_token TEXT")
+        if "tg_user_id" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN tg_user_id INTEGER")
+        if "email" not in columns:
+            alter_statements.append("ALTER TABLE orders ADD COLUMN email TEXT")
         for statement in alter_statements:
             await db.execute(statement)
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_state ON orders(state)")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_start_token ON orders(start_token)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_email ON orders(email)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_orders_tg_user ON orders(tg_user_id)")
+
+    def generate_start_token(self) -> str:
+        return secrets.token_urlsafe(8)
 
     async def create_order(self, payload: OrderCreate) -> int:
         now = datetime.utcnow().isoformat(timespec="seconds")
         fields: Dict[str, Any] = asdict(payload)
-        fields["withdraw_required"] = int(payload.withdraw_required)
-        fields["custom_test_required"] = int(payload.custom_test_required)
-        fields["kyc_required"] = int(payload.kyc_required)
+        if payload.withdraw_required is not None:
+            fields["withdraw_required"] = int(payload.withdraw_required)
+        if payload.custom_test_required is not None:
+            fields["custom_test_required"] = int(payload.custom_test_required)
+        if payload.kyc_required is not None:
+            fields["kyc_required"] = int(payload.kyc_required)
+        if not fields.get("start_token"):
+            fields["start_token"] = self.generate_start_token()
         fields["created_at"] = now
         fields["updated_at"] = now
         columns = ", ".join(fields.keys())
@@ -233,6 +266,102 @@ class OrdersRepository:
             rows = await cursor.fetchall()
         return {row["status"]: row["cnt"] for row in rows}
 
+    async def find_active_for_email(self, email: str, states: Sequence[str]) -> Optional[OrderRecord]:
+        if not email:
+            return None
+        query = """
+            SELECT * FROM orders
+            WHERE email = ? AND state IN ({states})
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """.format(states=",".join(["?"] * len(states)))
+        params: List[Any] = [email, *states]
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, params)
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_order(row)
+
+    async def find_active_for_tg(self, tg_user_id: int, states: Sequence[str]) -> Optional[OrderRecord]:
+        query = """
+            SELECT * FROM orders
+            WHERE tg_user_id = ? AND state IN ({states})
+            ORDER BY updated_at DESC
+            LIMIT 1
+        """.format(states=",".join(["?"] * len(states)))
+        params: List[Any] = [tg_user_id, *states]
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, params)
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_order(row)
+
+    async def get_by_start_token(self, token: str) -> Optional[OrderRecord]:
+        async with aiosqlite.connect(self._db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM orders WHERE start_token = ? LIMIT 1",
+                (token,),
+            )
+            row = await cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_order(row)
+
+    async def submit_order(self, order_id: int, *, price_eur: Optional[int] = None) -> Optional[OrderRecord]:
+        record = await self.get_order(order_id)
+        if record is None:
+            return None
+        if record.state == "submitted":
+            return record
+        updates: Dict[str, Any] = self._state_fields("submitted")
+        if price_eur is not None:
+            updates["price_eur"] = price_eur
+        await self.update_order(order_id, **updates)
+        return await self.get_order(order_id)
+
+    async def update_from_telegram(self, order_id: int, *, tg_user_id: Optional[int], **fields: Any) -> Optional[OrderRecord]:
+        updates = dict(fields)
+        updates.update(self._state_fields("in_progress"))
+        if tg_user_id is not None:
+            updates.setdefault("tg_user_id", tg_user_id)
+            updates.setdefault("user_id", tg_user_id)
+        await self.update_order(order_id, **updates)
+        return await self.get_order(order_id)
+
+    async def upsert_draft_order(
+        self,
+        payload: OrderCreate,
+        *,
+        match_email: Optional[str] = None,
+        match_tg_user_id: Optional[int] = None,
+        active_states: Sequence[str] = ("draft", "in_progress"),
+    ) -> OrderRecord:
+        existing: Optional[OrderRecord] = None
+        if match_email:
+            existing = await self.find_active_for_email(match_email, active_states)
+        if existing is None and match_tg_user_id is not None:
+            existing = await self.find_active_for_tg(match_tg_user_id, active_states)
+        if existing:
+            updates = asdict(payload)
+            updates.pop("state", None)
+            updates.pop("source", None)
+            updates.pop("start_token", None)
+            updates["state"] = payload.state
+            updates["status"] = payload.state
+            await self.update_order(existing.order_id, **updates)
+            refreshed = await self.get_order(existing.order_id)
+            assert refreshed is not None
+            return refreshed
+        order_id = await self.create_order(payload)
+        new_record = await self.get_order(order_id)
+        assert new_record is not None
+        return new_record
+
     async def save_payload_reference(self, token: str, payload: str) -> None:
         now = datetime.utcnow().isoformat(timespec="seconds")
         async with aiosqlite.connect(self._db_path) as db:
@@ -315,6 +444,8 @@ class OrdersRepository:
             user_id=row["user_id"],
             username=row["username"],
             source=row["source"],
+            state=row["state"],
+            start_token=row["start_token"],
             geo=row["geo"],
             method_user_text=row["method_user_text"],
             tests_count=row["tests_count"],
@@ -335,9 +466,15 @@ class OrdersRepository:
             payment_proof_file_id=row["payment_proof_file_id"],
             admin_notes=row["admin_notes"],
             payload_hash=row["payload_hash"],
+            tg_user_id=row["tg_user_id"],
+            email=row["email"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    @staticmethod
+    def _state_fields(state: str) -> Dict[str, Any]:
+        return {"state": state, "status": state}
 
 
 def serialize_files(items: Iterable[Dict[str, Any]]) -> str:
