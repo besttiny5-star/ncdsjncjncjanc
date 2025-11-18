@@ -774,7 +774,6 @@ def get_public_router(
             tg_user_id=message.from_user.id,
             **updates,
         )
-        record = await repo.submit_order(order_id, price_eur=total)
         await state.update_data(order_id=order_id)
         await notify_admins(
             message.bot,
@@ -791,10 +790,7 @@ def get_public_router(
             TEXTS.get("order.accepted", lang, order_id=order_id, total=total),
             reply_markup=ReplyKeyboardRemove(),
         )
-        if record and record.state != "submitted":
-            await show_payment(message, state, lang)
-        else:
-            await state.clear()
+        await show_payment(message, state, lang)
 
     async def notify_admins(bot: Bot, text: str) -> None:
         if not config.admin_ids:
